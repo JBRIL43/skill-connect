@@ -43,6 +43,57 @@ export async function POST(request: Request) {
     });
   }
 
+  // Mock-only introspection, for scripts/verify-mock-flows.py. The mock store is
+  // in-process, so there is no psql equivalent to assert against and no way to
+  // set up a state the fixtures do not already ship. Refused against a real
+  // database, where these would be a way to edit another user's data.
+  if (body.op?.startsWith("mock:")) {
+    if (repo().kind !== "mock") {
+      return NextResponse.json({ error: "mock mode only" }, { status: 400 });
+    }
+
+    if (body.op === "mock:inspect") {
+      const posting = await repo().getPosting(String(body.postingId));
+      const matches = await repo().listMatchesForPosting(String(body.postingId));
+      const matrices = await Promise.all(
+        matches.map(async (match) => ({
+          user_id: match.candidate_id,
+          dimensions:
+            (await repo().getSkillMatrix(match.candidate_id))?.embedding
+              ?.length ?? null,
+        })),
+      );
+
+      return NextResponse.json({
+        postingDimensions: posting?.embedding?.length ?? null,
+        matches: matches.map((match) => ({
+          candidate_id: match.candidate_id,
+          candidate_label: match.candidate_label,
+          anonymous_label: match.anonymous_label,
+          match_score: match.match_score,
+        })),
+        matrices,
+      });
+    }
+
+    if (body.op === "mock:set-optin") {
+      await repo().setOptInDiscoverable(String(body.userId), Boolean(body.value));
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.op === "mock:set-brief-review") {
+      const brief = await repo().getBriefByPosting(String(body.postingId));
+      // Reading it back is impossible once unreviewed, by design, so the store
+      // is reached through the same seam the adapter uses.
+      const { store } = await import("@/lib/data/mock/store");
+      const row = store().continuityBriefs.find(
+        (item) => item.posting_id === String(body.postingId),
+      );
+      if (row) row.reviewed_by_employee = Boolean(body.value);
+      return NextResponse.json({ ok: Boolean(row), wasVisible: Boolean(brief) });
+    }
+  }
+
   if (body.op === "match") {
     form.set("posting_id", String(body.postingId));
     const result = await runMatchAction({}, form);

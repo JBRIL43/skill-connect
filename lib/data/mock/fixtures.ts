@@ -218,6 +218,23 @@ const skillMatrices: SkillMatrix[] = [
     created_at: T1,
     embedding: null,
   },
+  // Dawit is the only fixture candidate who both completed challenges and did
+  // Pillar 1 intake, which is the ordinary case live and the only one that
+  // exercises the candidate half of the embedding write. Without a row here,
+  // mock mode always takes the skip branch and the write is never tested.
+  {
+    id: "sm-dawit",
+    user_id: "js-dawit",
+    skills_json: {
+      technical: { ai_prompt_literacy: 70, data_tools: 66 },
+      human: { customer_comms: 64, adaptability: 58, process_thinking: 61 },
+      raw_notes:
+        "Ran the stockroom for an electronics importer. Confident with spreadsheets, cautious about AI tools until he saw them save an afternoon.",
+    },
+    readiness_score: 67,
+    created_at: T1,
+    embedding: null,
+  },
 ];
 
 const sandboxScores: SandboxScore[] = [

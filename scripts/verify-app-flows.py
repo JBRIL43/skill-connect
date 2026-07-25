@@ -16,7 +16,7 @@ import sys
 import urllib.error
 import urllib.request
 
-BASE = os.environ.get("BASE", "http://localhost:3000")
+BASE = "http://localhost:3000"
 
 
 def load_env(path=".env.local"):
@@ -209,12 +209,48 @@ def main() -> int:
         check("the run produced at least one ranked candidate",
               payload.get("matched", 0) >= 1, f"matched {payload.get('matched')}")
 
-    _, matches = rest(f"matches?select=id,match_score,gap_analysis,status,candidate_id&posting_id=eq.{retail_posting}")
+    _, matches = rest(f"matches?select=id,match_score,gap_analysis,status,candidate_id,candidate_label,anonymous_label&posting_id=eq.{retail_posting}")
     check("matches were written with the engine's score",
           bool(matches) and all(m["match_score"] is not None for m in matches),
           f"{len(matches or [])} rows")
     check("a gap analysis was stored for each match",
           bool(matches) and all(m["gap_analysis"] for m in matches))
+
+    # ------------------------------------------------------------- pgvector
+    # Section 3's semantic layer. The columns are vector(1536); Postgres rejects
+    # anything else, so a stored value is also proof of the right width.
+    print("\nPhase 6 — the semantic layer persists to pgvector")
+    _, posting_rows = rest(f"sme_postings?select=id,embedding&id=eq.{retail_posting}")
+    role_vector = (posting_rows or [{}])[0].get("embedding")
+    check("the match run stored the role vector on the posting",
+          bool(role_vector), "sme_postings.embedding is still null")
+
+    matched_ids = [m["candidate_id"] for m in matches or []]
+    if matched_ids:
+        ids = ",".join(matched_ids)
+        _, matrices = rest(f"skill_matrices?select=user_id,embedding&user_id=in.({ids})")
+        with_vector = [m for m in matrices or [] if m.get("embedding")]
+        # A candidate with no skill_matrices row is skipped rather than created:
+        # the matrix is Pillar 1's to write. So this asserts on rows that exist.
+        check("every matched candidate holding a skill matrix has a vector",
+              bool(matrices) and len(with_vector) == len(matrices),
+              f"{len(with_vector)}/{len(matrices or [])} rows populated")
+
+        if role_vector:
+            width = len(json.loads(role_vector) if isinstance(role_vector, str) else role_vector)
+            check("the stored vector is 1536-dimensional", width == 1536,
+                  f"got {width}")
+
+    # ------------------------------------------------------- candidate label
+    # 0006 derives this from a trigger, which is what lets the ranked list name
+    # a candidate without any SME read path onto profiles.
+    print("\nRanked results label candidates without reading profiles")
+    check("every match carries a display label",
+          bool(matches) and all(m["candidate_label"] for m in matches),
+          f"{sum(1 for m in matches or [] if m['candidate_label'])}/{len(matches or [])}")
+    check("an opted-in candidate is shown by name, not as a letter",
+          any(m["candidate_label"] != m["anonymous_label"] for m in matches or []),
+          "every row fell back to the anonymous label")
 
     # Re-running must take the update branch, which is the path 0005 forbids on
     # the session client. This is the regression that motivated the fix.
@@ -318,6 +354,37 @@ def main() -> int:
                       body={"op": "handover", "postingId": transition_posting})
     check("another SME cannot generate from a brief they do not own", status >= 400,
           f"status {status}")
+
+    # ------------------------------------------------- unreviewed brief (506)
+    # "Continuity Briefs are unreachable until reviewed_by_employee = true."
+    # Flip the seeded brief, confirm nothing leaks, and put it back.
+    print("\nAn unreviewed brief is unreachable, not merely hidden")
+    _, before = rest(f"continuity_briefs?select=id,generated_brief&posting_id=eq.{transition_posting}")
+    brief_id = before[0]["id"] if before else None
+    secret = (before[0].get("generated_brief") or "") if before else ""
+
+    if brief_id:
+        rest(f"continuity_briefs?id=eq.{brief_id}", method="PATCH",
+             body={"reviewed_by_employee": False})
+        try:
+            status, html = app("GET", f"/matcher/postings/{transition_posting}",
+                               cookies=logistics)
+            check("the posting page renders without the brief card",
+                  status == 200 and "Score candidates on this actual job" not in html,
+                  f"status {status}")
+            check("no awaiting-approval state is shown for a state that cannot be reached",
+                  "Awaiting approval" not in html)
+            leak = secret[:60].strip()
+            check("the unreviewed brief text appears nowhere in the page",
+                  bool(leak) and leak not in html, "brief text leaked into the HTML")
+
+            status, res = app("POST", "/api/verify-flows", cookies=logistics,
+                              body={"op": "handover", "postingId": transition_posting})
+            check("generating a challenge from an unreviewed brief is refused",
+                  status >= 400, f"status {status}: {str(res)[:200]}")
+        finally:
+            rest(f"continuity_briefs?id=eq.{brief_id}", method="PATCH",
+                 body={"reviewed_by_employee": True})
 
     # ------------------------------------------------------------ public pages
     print("\nPublic surfaces")

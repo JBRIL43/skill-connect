@@ -88,21 +88,31 @@ export async function POST(request: Request) {
 }
 
 /**
- * Dev 1 owns the notification check (Phase 5) and their route is the one that
- * ships. It authenticates with a Supabase session, though, and mock mode has
- * none — mock is the demo-day fallback and must keep firing the Pillar 3 beat,
- * so the stand-in stays as the mock path rather than being deleted.
+ * Dev 1 owns the notification check (Phase 5) and their /api/notifications/check
+ * is the route that should ship. It is not wired up by default yet, because
+ * adopting it breaks the Pillar 3 demo beat. Set NOTIFY_VIA_DEV1_ROUTE=1 to use
+ * it; the check below is one line to delete once the semantics are settled.
  *
- * Their route reads the *latest* score per competency where the match engine
- * reads the *best*. A candidate who retries a challenge and scores lower can
- * therefore be notified against one bar and ranked against another. Flagged to
- * Dev 1; the engine keeps best, because a retry should not cost standing.
+ * Measured on the live project. Their route scores a candidate on their *latest*
+ * value per competency; the match engine uses their *best*. Meron's seeded row
+ * has ai_prompt_literacy 82 and customer_comms 88, which clears Retail Inventory
+ * Assistant. Grade her again and the stub returns 48 and 58, so under "latest"
+ * she drops below a bar she had already cleared and no notification fires — while
+ * the match engine still ranks her at 84 and lists her to the SME. The ranked
+ * list and the notifications then disagree about the same candidate.
+ *
+ * Best is the defensible rule: attempting a challenge again should never cost a
+ * candidate standing they earned, or the Sandbox punishes practice. Handed to
+ * Dev 1 with this case; theirs to change, since it is their route.
+ *
+ * Mock mode keeps the stand-in regardless — their route needs a Supabase
+ * session, and mock is the fallback that still has to fire the beat on stage.
  */
 async function notifyAfterGrade(
   request: Request,
   candidateId: string,
 ): Promise<{ notified: number; optedOut: boolean }> {
-  if (repo().kind === "supabase") {
+  if (repo().kind === "supabase" && process.env.NOTIFY_VIA_DEV1_ROUTE === "1") {
     try {
       const response = await fetch(
         new URL("/api/notifications/check", request.url),

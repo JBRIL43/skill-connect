@@ -145,23 +145,21 @@ actions and is never imported into a client component.
 
 ## 7. Open items for Dev 1
 
-**1. An SME has no way to see who a candidate is.** `profiles` is own-row only,
-and `matches` carries just `match_score`, `gap_analysis`, and `status`. So the
-ranked results list has no name, no region, nothing to label a row with. Three
-ways out, and the choice is Dev 1's because two are migrations:
+**1. ~~An SME has no way to see who a candidate is~~ — solved by Dev 1 in
+`0006_match_candidate_label.sql`.** I had offered three options: a display-name
+column on `matches`, a `profiles` select policy gated on `sme_has_match_with()`,
+or permanent "Candidate A/B/C" anonymity. Dev 1 took a fourth and better one: a
+`SECURITY DEFINER` trigger derives `candidate_label` into `matches`, so `profiles`
+never opens at all, and a second trigger takes the name back if a candidate later
+opts out. The temporary `listCandidateLabelsForPosting` service-role read is
+deleted — the ranked list now reads the derived column through the existing
+`matches` policy, and shows no region, since match results are Match Score and
+Gap Analysis only.
 
-- a display-name column on `matches`, written by the service role during the run;
-- a `profiles` select policy gated on `sme_has_match_with(id)`;
-- or keep candidates deliberately anonymous until hire, and I label rows
-  "Candidate A/B/C".
-
-Dev 3 builds against the third option for now, since it needs no schema change
-and is defensible on privacy grounds. Say the word and it becomes either of the
-others in minutes.
-
-**2. Please confirm the service role is the intended path** for the three
-operations in the table above. `lib/supabase/admin.ts` already names "the
-notification check", so this is likely just a yes.
+**2. Please confirm the service role is the intended path** for the remaining
+elevated operations in the table above. `lib/supabase/admin.ts` already names
+"the notification check", so this is likely just a yes. Note that `0005`'s column
+grants make it mandatory for `upsertMatch`, whatever the answer.
 
 **3. Two shared files were touched, both narrowly.** Flagging rather than
 assuming:
@@ -201,6 +199,15 @@ the service role, on migrations `0001`–`0005`. Three commands reproduce it:
 Note that an exported `NEXT_PUBLIC_DATA_SOURCE` in the launching shell silently
 beats `.env.local`; the script now refuses to run if it detects mock personas,
 because otherwise every check passes for the wrong reason.
+
+`npm run verify:mock` is the same idea for the offline fallback, and needs no
+network or credentials at all — start the app with
+`NEXT_PUBLIC_DATA_SOURCE=mock npm run dev` and run it. It exists because mock
+mode reimplements in TypeScript what Postgres does in SQL: `0006`'s two label
+triggers and the reviewed-brief filter both live twice now, and the copy that
+runs on stage if the network dies is the one nothing was checking. It also
+catches the case where the mock store and the live schema drift apart. Both
+suites accept `VERIFY_BASE_URL` if the app is not on port 3000.
 
 ### What the live run caught
 
@@ -246,25 +253,106 @@ the two vocabularies still overlap, so this cannot regress quietly.
   unseen, re-grading does not duplicate, and a candidate who has not opted in is
   never evaluated.
 
+### `pgvector` now runs, with a caveat worth stating plainly
+
+Both `sme_postings.embedding` and `skill_matrices.embedding` are written on
+every match run and verified live at 1536 dimensions.
+[lib/matcher/embed.ts](../lib/matcher/embed.ts) is the provider seam: OpenAI
+`text-embedding-3-small` when a key is present, and otherwise a deterministic
+hashed bag-of-words at the same width, L2-normalised.
+
+Matching the width offline is the point. The columns are `vector(1536)` and
+Postgres rejects anything else, so without it the persistence path could not be
+tested on a machine with no key — which is every machine we have.
+
+**What this does not buy.** With both keys blank the vectors encode lexical
+overlap, not meaning. Two candidates who describe the same competency in
+different words still look unrelated. Semantic similarity is 10 of 100 Match
+Score points and additive, so this changes ranking slightly and eligibility not
+at all. Setting `OPENAI_API_KEY` and `AI_MODE=live` switches it with no other
+change.
+
+The candidate side no longer embeds bio and region, which described a person
+rather than a verified capability. It is now built from the competencies they
+scored strongly on plus the titles and sectors of challenges they completed, and
+the role side names the competencies its template asks for, so both sides draw
+wording from the same `COMPETENCIES` table.
+
 ### Still not exercised
 
-- **`pgvector`.** Every seeded `embedding` is `null`, so
-  `lib/matcher/semantic.ts` has still only ever run its token-overlap fallback.
-  This needs Dev 2's embeddings before it means anything.
+- **In-database ANN.** Ranking loads vectors and compares them in the
+  application. `order by embedding <=> $1` needs a SQL function, which is a
+  migration, which is Dev 1's — see the request below.
 - **The `0003` signup trigger**, beyond the accounts that already existed.
 
-### Two things for Dev 1
+### For Dev 1
 
-- **`scripts/test-rls.ps1` re-seeds the old vocabulary.** It inserts
-  `scores_json = @{ prompt_engineering = 82 }`, which reintroduces exactly the
-  problem fixed above every time the suite runs. It should write
-  `ai_prompt_literacy`.
-- **`sneaky.admin@example.com` is now `role = 'admin'`.** The suite uses it as
-  the "other job seeker" (`$other`) for two `Assert-NoData` checks. `0002` gives
-  admins read-all on both tables, and signed in as that account it returns 7
-  `skill_matrices` and 12 `sandbox_scores` — every row in the table. Those two
-  checks should be failing. `rls-fixture-seeker@example.com` already exists,
-  takes the same password, and returns 0/0/1, which is what they intended.
+**1. The notification check disagrees with the match engine, and it costs the
+Pillar 3 beat.** Measured live, not theorised.
+`/api/notifications/check` scores a candidate on their *latest* value per
+competency; `lib/matcher/run.ts` uses their *best*. Meron's seeded row holds
+`ai_prompt_literacy` 82 and `customer_comms` 88, clearing Retail Inventory
+Assistant. Grade her again and the stub returns 48 and 58, so under "latest" she
+drops below a bar she had already cleared and no notification fires — while the
+match engine still ranks her at 84 and lists her to the SME. The ranked list and
+the notifications then contradict each other about the same person.
+
+Best is the defensible rule: attempting a challenge again should never cost a
+candidate standing they already earned, or the Sandbox punishes practice. There
+is also a subtler problem with "latest" as implemented — a competency absent from
+the newest row keeps its value from an older one, so the result is neither the
+most recent attempt nor the best, but a mix.
+
+The grade handler is wired to call your route behind `NOTIFY_VIA_DEV1_ROUTE=1`
+and defaults to the stand-in so the demo beat keeps working. Flip the default the
+moment the semantics agree; it is one condition in
+[app/api/sandbox/grade/route.ts](../app/api/sandbox/grade/route.ts).
+
+**2. `.env.example` tells Dev 3 to leave the service role blank, and that breaks
+the matcher.** Your own `0005` does `revoke update on public.matches` then
+`grant update (status)`, so an SME may set status and nothing else and
+`upsertMatch` cannot write `match_score` or `gap_analysis` as the signed-in user.
+Ranking is cross-user by nature too: an SME has no read on other candidates'
+`sandbox_scores`, correctly. The grant is right and the split is right; only the
+note is wrong. Corrected in the merge — worth knowing in case it is repeated
+elsewhere.
+
+**3. Dispatch Coordinator matches nobody, and the vocabulary fix did not touch
+it.** It asks for `task_accuracy >= 80` and `customer_comms >= 70`. Dawit is
+90/57, Meron 74/88, Hanna 68/93 and opted out. It is also the transition posting
+behind the checklist's "Pillar 3b: Continuity Brief and custom challenge are
+visible for the demo transition posting", so that beat currently shows an empty
+ranked list beside a working handover challenge. Dropping `task_accuracy` to 70
+would let Meron through.
+
+**4. A request, not a change: the ANN function.** Ranking currently compares
+vectors in the application, which is fine at seed scale and wrong at any real
+one. The function below belongs in a migration, which is yours. With it, the
+adapter switches to a single `.rpc("match_candidates_by_vector", ...)`.
+
+```sql
+create or replace function public.match_candidates_by_vector(
+  query_embedding vector(1536),
+  match_count int default 20
+)
+returns table (user_id uuid, similarity float)
+language sql
+stable
+as $$
+  select sm.user_id,
+         1 - (sm.embedding <=> query_embedding) as similarity
+  from public.skill_matrices sm
+  join public.profiles p on p.id = sm.user_id
+  where sm.embedding is not null
+    and p.opt_in_discoverable          -- Section 9, enforced in the query
+  order by sm.embedding <=> query_embedding
+  limit match_count;
+$$;
+```
+
+Two things to keep if you rewrite it: the `opt_in_discoverable` join, so the
+opt-in gate cannot be forgotten by a caller, and returning `user_id` and a score
+only, never matrix contents.
 
 ### Verifying without credentials
 
@@ -272,11 +360,13 @@ the two vocabularies still overlap, so this cannot regress quietly.
 ([scripts/check-contracts.py](../scripts/check-contracts.py)). It reads the
 migrations and fails on drift in three places that nothing else catches:
 
-- **`lib/types/database.ts` against `0001_initial_schema.sql`.** The mirror is
+- **`lib/types/database.ts` against the migrations.** The mirror is
   hand-maintained, so a rename silently makes every downstream type wrong.
-  Currently 11 tables and 75 columns, all matching.
+  Currently 11 tables and 77 columns, all matching. `alter table ... add column`
+  from later migrations is folded in, since `0001` is not the whole schema —
+  `0006` adds the two label columns that way.
 - **`lib/data/supabase/adapter.ts` against the schema.** 40 queries across 10
-  tables and 60 column references, all valid. Under RLS a wrong column name in a
+  tables and 59 column references, all valid. Under RLS a wrong column name in a
   filter returns an empty array rather than an error, so this class of bug does
   not announce itself.
 - **The four assumptions the service-role split rests on.** Each one asserts a

@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { streamConversationFromApi } from "@/lib/ai/client";
 import type { ConversationMessage, SkillMatrixOutput } from "@/lib/ai";
 
 type Language = "en" | "am";
@@ -136,46 +137,23 @@ export function CoachChat() {
     abortRef.current = controller;
 
     try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      await streamConversationFromApi({
+        mode: "coach",
+        messages: nextMessages.map(({ role, content: text }) => ({
+          role,
+          content: text,
+        })),
         signal: controller.signal,
-        body: JSON.stringify({
-          mode: "coach",
-          messages: nextMessages.map(({ role, content: text }) => ({
-            role,
-            content: text,
-          })),
-        }),
+        onText: (assistantText) => {
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === assistantId
+                ? { ...message, content: assistantText }
+                : message,
+            ),
+          );
+        },
       });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        throw new Error(payload?.error ?? "Coach response failed");
-      }
-
-      if (!response.body) {
-        throw new Error("No response stream returned");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let assistantText = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        assistantText += decoder.decode(value, { stream: true });
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === assistantId
-              ? { ...message, content: assistantText }
-              : message,
-          ),
-        );
-      }
     } catch (streamError) {
       if (
         streamError instanceof DOMException &&

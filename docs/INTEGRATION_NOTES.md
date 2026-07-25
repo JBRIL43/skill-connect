@@ -132,3 +132,80 @@ logs. The live database and both seed files are now on the frozen list, and
 
 `skills_json` on the skill matrix is a separate, free-form thing. Nothing in
 matching reads it.
+
+## Everyone: the full three-way merge builds and passes
+
+> Added by Dev 3, from a throwaway branch that merged `d2/ai-coach` onto
+> `dev3/pillar3-matcher`, which already carries all seven commits of
+> `d1/foundation`. Nothing was pushed and the branch was deleted afterwards, so
+> the merge to `main` is still ours to do together.
+
+The trial merges above establish which files conflict. This is the other half of
+the question, and the one that decides whether `main` is demoable: does the
+merged tree actually run. It does.
+
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | clean |
+| `npm run lint` | clean |
+| `npm run check:contracts` | 11 tables, 77 columns, all contracts hold |
+| `npm run build` | 23 routes compile |
+| `npm run verify:mock` | 20 of 20 checks pass |
+
+Two files conflict, both config, none of it application code -- the folder
+ownership in `.cursor/rules/` did its job a second time. `package.json` is a
+single line, Dev 3's `@xyflow/react`, which `d2/ai-coach` has no reason to carry;
+keep it. Dev 2 independently picked the same versions Dev 3 did for `ai`,
+`@ai-sdk/openai` and `zod`, so there is no version skew to reconcile. The
+lockfile regenerates with `npm install`, as prescribed above.
+
+## Dev 2: the coach throws when no LLM key is set
+
+`lib/ai/engine.ts` refuses to start without a key:
+
+```ts
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error("OPENAI_API_KEY is not configured");
+}
+```
+
+Neither `OPENAI_API_KEY` nor `GEMINI_API_KEY` is set in `.env.local` today, so on
+the merged tree every Pillar 1 AI surface -- the chat, the skill matrix, the
+career recommendations -- fails at runtime while the rest of the app is healthy.
+This is not a merge problem; merging just puts it somewhere you can see it.
+
+The asymmetry is worth naming, because it explains why the failure is one-sided.
+Pillars 2 and 3 route model calls through `isLiveAI()` in `lib/ai/provider.ts`,
+where `AI_MODE=live` only counts when a key is actually present:
+
+```ts
+return process.env.AI_MODE === "live" && Boolean(process.env.OPENAI_API_KEY);
+```
+
+Today `.env.local` sets `AI_MODE=stub` outright, so Pillars 2 and 3 are on the
+deterministic path deliberately -- it needs no key and no network. The key check
+above is the second layer: flipping `AI_MODE` to `live` on a machine without a key
+still degrades to that same grader instead of breaking. Two independent reasons
+the Sandbox demo survives a dead venue wifi, which is exactly the property Pillar 1
+is missing.
+
+There are two ways out and they are not exclusive. Someone adds a real key, which
+works but leaves the demo dependent on the venue's network on the day. Or Pillar 1
+gets a stub path chosen by the same predicate, so a missing key degrades to canned
+output instead of an exception. The second is what actually makes the run safe,
+and it is worth the hour.
+
+## Dev 2: your branch predates the schema you will demo on
+
+`d2/ai-coach` branches from `df14fc1`, five commits behind `d1/foundation`. It has
+never seen `0005_column_grants.sql`, `0006_match_candidate_label.sql`, the
+frozen-vocabulary seed fix, or `scripts/seed.ts`. Nothing in the merge broke
+because of it, so this is not urgent -- but it does mean the Pillar 1 screens have
+only ever run against a schema that no longer exists. Better to pull Dev 1's tip
+and re-check before the real merge than to discover it during one.
+
+One thing is already right, and worth recording so nobody redoes it:
+`lib/ai/sandbox-catalog.ts` mirrors Dev 3's registry exactly -- the same three
+node ids, the same sectors, the same competency sets, on the frozen six keys. The
+deep links in the career recommendations resolve to challenges that exist. That
+was the Hour 14 handoff, and it landed.

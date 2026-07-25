@@ -105,7 +105,16 @@ Studio → Table Editor → `profiles`, or sign in as any account and visit
 .\scripts\verify-routing.ps1                # role routing — needs `npm run dev` in another terminal
 .\scripts\test-notifications.ps1            # the notification check — also needs a dev server
 .\scripts\verify-promote.ps1                # the invite-code path to admin — also needs a dev server
+.\scripts\test-payments.ps1                 # the upgrade flow and webhook — also needs a dev server
 .\scripts\run-sql.ps1 -Query "select 1;"    # ad-hoc SQL against the linked project
+```
+
+Two more run without a database or a dev server, so they are the fastest way to
+catch a break:
+
+```powershell
+npm run test:sign   # Telebirr request signing, against Ethio Telecom's worked example
+npm run test:plan   # which templates a free vs premium SME gets notified on
 ```
 
 `test-rls.ps1` checks that candidates see their own data, that nobody else can,
@@ -128,7 +137,56 @@ SME get different dashboards, and only an admin reaches `/admin`. If Next tells
 you port 3000 was taken, pass the port it used:
 `.\scripts\verify-routing.ps1 -BaseUrl http://localhost:3001`.
 
-Any FAIL in either suite is a P0 and stops the build.
+`test-payments.ps1` runs the whole upgrade on a throwaway SME — checkout, the
+styled gateway, confirmation, premium unlocking, the admin counter moving — then
+posts the webhook twice to prove settling is idempotent. It deliberately does not
+use a seeded company, because paying as one would leave it on Premium and change
+what the demo shows.
+
+Any FAIL in any suite is a P0 and stops the build.
+
+## Payments
+
+An SME upgrades from `/dashboard/upgrade`. Which rail that uses is one
+environment variable:
+
+```
+PAYMENTS_PROVIDER=mock       # Telebirr-styled checkout on our own origin
+PAYMENTS_PROVIDER=telebirr   # the real C2B sandbox
+```
+
+Nothing outside `lib/payments/` knows which is live, so falling back mid-event is
+that line plus a redeploy. Both write the same `payments` row; only `provider`
+differs. The mock is not scaffolding to be deleted — it is the Section 16 answer
+to the sandbox being unreachable, and it stays tested.
+
+**Premium is derived, never stored.** An SME is premium because they own a
+`payments` row with `status = 'paid'`. There is no `is_premium` flag to drift out
+of step with the payment that was meant to set it.
+
+**What it unlocks.** Auto-notify beyond the first Role Skill Template, plus
+priority Institutional Handover. The free allowance is one template rather than
+zero on purpose: the demo fires a notification at step 5 and only upgrades at
+step 7, so a hard gate would break the script when run in order. The rule lives
+in `lib/payments/plan.ts` and is enforced in `/api/notifications/check`, which is
+the only place `notify_on_match` does anything — so it holds even if a template
+editor that has not heard of premium lets the flag be set.
+
+**The real rail, if you are picking it up.** Three steps against Ethio Telecom's
+C2B gateway: fetch a fabric token, `preOrder` for a `prepay_id`, then redirect to
+a signed paygate URL. Two things are counter-intuitive and both are commented in
+the code. The signature is RSA-PSS even though the field is called
+`SHA256WithRSA` — their prose says PKCS#1 and four of their five code samples say
+otherwise. And the paygate query string is built by hand because the base64
+signature must not be URL-encoded. `npm run test:sign` pins the first against
+their own worked example.
+
+Payment is confirmed by asking the gateway (`queryOrder`), not by trusting the
+webhook. Verifying the callback's signature would need Telebirr's public key and
+the portal only issues ours, so `/api/payments/telebirr/notify` treats the
+callback as a prompt to go and check. It is also the reason the completion screen
+polls: the testbed never sends a real USSD prompt, orders just settle after
+about thirty seconds.
 
 ## Demo seed data
 

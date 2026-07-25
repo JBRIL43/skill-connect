@@ -10,6 +10,12 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/company-profile",
   "/readiness",
+  // Telebirr POSTs here from their own servers with no session. Without this it
+  // would be redirected to /login, and a 307 is indistinguishable from success
+  // at their end -- the payment would simply never be recorded. The route
+  // authenticates the notification by asking the gateway about the order rather
+  // than by trusting the caller.
+  "/api/payments/telebirr/notify",
 ];
 
 function isPublic(pathname: string) {

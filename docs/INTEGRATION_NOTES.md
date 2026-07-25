@@ -20,9 +20,16 @@ shared config file:
 "typecheck": "tsc --noEmit",
 "seed": "tsx --env-file=.env.local scripts/seed.ts",
 "check:contracts": "python3 scripts/check-contracts.py",
+"verify:mock": "python3 scripts/verify-mock-flows.py",
 "verify:live": "python3 scripts/verify-live.py",
 "verify:flows": "python3 scripts/verify-app-flows.py"
 ```
+
+One caveat on `.env.example`, where "keep every line from both sides" is not
+quite enough: the `d1/foundation` rewrite drops `NEXT_PUBLIC_DATA_SOURCE` and
+`AI_MODE`, and unset counts as mock. A teammate following "copy this file and you
+are set" therefore gets an app that looks live, is fully seeded, and is serving
+in-memory fixtures. Both are restored on `dev3/pillar3-matcher`.
 
 `package-lock.json` is not worth resolving by hand. Take either side, then run
 `npm install` and commit the regenerated file.
@@ -31,6 +38,11 @@ shared config file:
 sides. Nobody's entries contradict anybody else's.
 
 ## Dev 3: `check-contracts.py` needs to read every migration
+
+> **Done** in `dev3/pillar3-matcher`. `parse_sql_tables()` now folds
+> `alter table ... add column` from every migration into the schema it compares
+> against, and drops what a later migration drops, per the suggestion below. The
+> checker reports 77 columns and passes.
 
 `npm run check:contracts` goes red on the merge, and not because of anything in
 your code. It reads the schema from `0001_initial_schema.sql` alone, so any
@@ -87,6 +99,13 @@ With both applied the checker reports 77 columns and passes. Verified on a
 scratch merge of the two branches.
 
 ## Dev 3: the ranked-results screen can show real names
+
+> **Done** in `dev3/pillar3-matcher`. The ranked list renders
+> `match.candidate_label` directly, and the temporary
+> `listCandidateLabelsForPosting` service-role read of `profiles` is deleted.
+> Region went with it, since match results are Match Score and Gap Analysis only.
+> The mock adapter mirrors both of `0006`'s triggers, including taking the name
+> back on opt-out, so the offline fallback behaves the same.
 
 `matches.candidate_label` now exists, so the anonymous `Candidate A / B / C`
 labels no longer have to be the whole story. Render the column as-is:

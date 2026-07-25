@@ -95,7 +95,7 @@ def apply_alters(tables: dict[str, dict[str, dict]]) -> None:
             if table not in tables:
                 continue
             for clause in re.finditer(
-                r"add column\s+(?:if not exists\s+)?(\w+)\s+([^,]+)",
+                r"add column\s+(?:if not exists\s+)?(\w+)\s+([^,;]+)",
                 body,
                 re.I,
             ):
@@ -104,6 +104,12 @@ def apply_alters(tables: dict[str, dict[str, dict]]) -> None:
                     "nullable": "not null" not in rest,
                     "default": "default" in rest,
                 }
+            # A dropped column has to disappear too, or database.ts keeping a
+            # stale field reads as correct.
+            for clause in re.finditer(
+                r"drop column\s+(?:if exists\s+)?(\w+)", body, re.I
+            ):
+                tables[table].pop(clause.group(1), None)
 
 
 def check_types(sql_tables) -> None:

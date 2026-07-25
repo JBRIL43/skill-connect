@@ -27,8 +27,10 @@ COOKIE = "sc_demo_profile"
 # Fixture ids from lib/data/mock/fixtures.ts.
 SME_KALITI = "sme-kaliti"          # owns the transition posting and its brief
 SME_BOLE = "sme-bole"              # owns the inventory posting
+JS_DAWIT = "js-dawit"              # a candidate, owns neither
 POST_INVENTORY = "post-inventory"
 POST_DISPATCH = "post-dispatch"
+TRANSITION_NODE = f"transition-{POST_DISPATCH}"
 
 passes = 0
 failures: list[str] = []
@@ -167,6 +169,38 @@ def main() -> int:
     status, res = op(SME_KALITI, op="handover", postingId=POST_DISPATCH)
     check("it generates again once the brief is approved", status == 200,
           f"status {status}: {str(res)[:200]}")
+
+    # -------------------------------------------- Pillar 3b, candidate side
+    # The generated body has no table, so the store behind it is a per-process
+    # memo. Clearing it is what a second instance, or a restart, looks like.
+    print("\nA transition challenge survives the instance that generated it")
+    status, res = op(SME_KALITI, op="mock:clear-generated")
+    check("the generated-challenge memo can be emptied", status == 200,
+          f"status {status}: {str(res)[:200]}")
+
+    status, html = app("GET", "/sandbox", profile=JS_DAWIT)
+    check("a candidate's node tree lists the transition challenge on a cold cache",
+          status == 200 and TRANSITION_NODE in html,
+          f"status {status}; deriving the tree from the memo is what breaks this")
+
+    op(SME_KALITI, op="mock:clear-generated")
+    status, html = app("GET", f"/sandbox/{TRANSITION_NODE}", profile=JS_DAWIT)
+    check("a candidate can open it without the SME having just generated it",
+          status == 200,
+          f"status {status}; the brief is SME-scoped, so this 404s if the "
+          "challenge is resolved through the owner-only read")
+    # The reviewed interview's tasks and tools are meant to be here -- being
+    # scored on the actual job is the Section 2 point 4 feature, and review is
+    # the redaction step that makes it safe. What must not appear is anything
+    # that only exists for the SME.
+    check("the challenge is built from the real job, not a generic rubric",
+          "Confirm farm arrival quantities" in html,
+          "the generated body did not carry the real recurring tasks")
+    check("the SME-facing continuity brief prose stays out of it",
+          "then restaurants by delivery distance" not in html,
+          "the brief itself was rendered, not the challenge derived from it")
+    check("the internal review note stays out of it",
+          "specific client contact names were removed" not in html)
 
     # ------------------------------------------------------------- ownership
     print("\nOwnership holds without a database to enforce it")

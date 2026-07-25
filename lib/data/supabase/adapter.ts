@@ -309,6 +309,18 @@ export const supabaseRepository: DataRepository = {
     );
   },
 
+  // Session client: 0002 lets any authenticated user read an open posting, so a
+  // candidate can enumerate transition roles without elevation.
+  async listOpenTransitionPostings() {
+    return unwrapList<SmePosting>(
+      await (await db())
+        .from("sme_postings")
+        .select("*")
+        .eq("is_transition_role", true)
+        .eq("status", "open"),
+    );
+  },
+
   async getPostingByTemplate(templateId) {
     return unwrap<SmePosting>(
       await (await db())
@@ -468,6 +480,19 @@ export const supabaseRepository: DataRepository = {
     );
   },
 
+  // Elevated on purpose, and the reasoning is on the interface. Still reviewed-only:
+  // the filter is the redaction guarantee, not the ownership check.
+  async getReviewedBriefForChallenge(postingId) {
+    return unwrap<ContinuityBrief>(
+      await elevated()
+        .from("continuity_briefs")
+        .select("*")
+        .eq("posting_id", postingId)
+        .eq("reviewed_by_employee", true)
+        .maybeSingle(),
+    );
+  },
+
   async listReviewedBriefsBySme(smeId) {
     const client = await db();
 
@@ -499,10 +524,6 @@ export const supabaseRepository: DataRepository = {
 
   async getGeneratedChallenge(nodeId) {
     return generatedChallenges.get(nodeId) ?? null;
-  },
-
-  async listGeneratedChallenges() {
-    return Array.from(generatedChallenges.values());
   },
 
   async saveGeneratedChallenge(challenge: GeneratedChallenge) {

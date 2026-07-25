@@ -104,6 +104,14 @@ export interface DataRepository {
   getPostingByTemplate(templateId: string): Promise<SmePosting | null>;
 
   /**
+   * Every open transition role, across all companies. Readable by any signed-in
+   * user under 0002's "sme_postings: authenticated read open" policy, which is
+   * what lets the candidate's node tree list transition challenges without a
+   * service-role read.
+   */
+  listOpenTransitionPostings(): Promise<SmePosting[]>;
+
+  /**
    * Carries matches.candidate_label, which 0006 derives from a trigger: the
    * candidate's name only while they are discoverable, a stable "Candidate A"
    * otherwise. There is deliberately no read path onto profiles here.
@@ -132,7 +140,32 @@ export interface DataRepository {
   listReviewedBriefsBySme(smeId: string): Promise<ContinuityBrief[]>;
   setBriefCustomNode(briefId: string, nodeId: string): Promise<void>;
 
+  /**
+   * The reviewed brief behind a transition challenge, for challenge generation
+   * only — never to render.
+   *
+   * 0002 scopes continuity_briefs to the owning SME, which is correct for the
+   * brief but wrong for the challenge derived from it: the candidate replacing
+   * the departing employee is precisely who the challenge is for, and they will
+   * never own the posting. getBriefByPosting therefore returns null for them and
+   * the challenge page 404s.
+   *
+   * So this reads past that policy, and is safe to only because of what it is
+   * used for. reviewed_by_employee is still required, so the source has been
+   * redacted; the caller returns a generated SandboxNode and never the brief
+   * itself; and a candidate seeing the simulation of a job they are applying for
+   * is the Section 2 point 4 feature, not a leak.
+   */
+  getReviewedBriefForChallenge(
+    postingId: string,
+  ): Promise<ContinuityBrief | null>;
+
+  /**
+   * A per-process memo for generated challenge bodies, which have no table in
+   * Section 8's schema. Not storage: a miss must always be rebuildable, so there
+   * is deliberately no "list everything cached" read — deriving a node tree from
+   * one gives a different answer per instance.
+   */
   getGeneratedChallenge(nodeId: string): Promise<GeneratedChallenge | null>;
-  listGeneratedChallenges(): Promise<GeneratedChallenge[]>;
   saveGeneratedChallenge(challenge: GeneratedChallenge): Promise<void>;
 }

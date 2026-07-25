@@ -139,9 +139,35 @@ empty array that reads exactly like a scoring bug. The split in
 | match run's score and opt-in reads | service role | an SME has no policy on `sandbox_scores` |
 | `continuity_briefs.custom_node_id` write | service role | the table has no write policy at all |
 | `matches` insert and update | session | `owns_posting()` is tighter than the service role |
+| reviewed brief behind a transition challenge | service role | the candidate taking it never owns the posting |
+| open transition postings, for the node tree | session | 0002 lets any signed-in user read an open posting |
 
 The service role bypasses RLS entirely, so it stays in route handlers and server
 actions and is never imported into a client component.
+
+### Why challenge resolution reads past the brief policy
+
+`continuity_briefs` is scoped to the owning SME, which is right for the brief and
+wrong for the challenge derived from it. The candidate replacing the departing
+employee is exactly who the challenge is for, and they will never own the
+posting — so resolving it through `getBriefByPosting` returned null for them and
+the challenge page 404'd. Phase 8's "route incoming candidates to be scored
+against this specific challenge" could not work at all except by accident, when
+the SME happened to have generated the node in the same process moments earlier.
+
+`getReviewedBriefForChallenge` reads past the policy, and is narrow enough to be
+safe for three reasons: `reviewed_by_employee` is still required, so the source
+has been through the redaction step; the caller returns a generated `SandboxNode`
+and never the brief; and `verify:mock` asserts that the SME-facing brief prose and
+the internal review note do not reach the candidate's page, while the real
+recurring tasks do, which is the Section 2 point 4 feature rather than a leak.
+
+One caveat on that coverage, stated plainly because it matters: mock mode has no
+RLS, so those checks prove the cold-cache half of this and not the policy half. A
+mutation run confirms the node-tree check fails when the tree is derived from the
+in-process memo again, but the candidate-can-open check passes either way in mock.
+Proving the policy half needs `verify:flows` against live Supabase with a job
+seeker session, which is the one gap left in this area.
 
 ---
 

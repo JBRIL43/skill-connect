@@ -9,8 +9,12 @@ const TRANSITION_PREFIX = "transition-";
  * challenges or a Pillar 3b challenge generated from a reviewed handover.
  *
  * Generated bodies have no home in Section 8's flat schema (only
- * continuity_briefs.custom_node_id exists), so a cold cache is rebuilt
- * deterministically from the reviewed brief rather than becoming a dead link.
+ * continuity_briefs.custom_node_id exists), so the store behind
+ * getGeneratedChallenge is a per-process memo, not storage. Everything below it
+ * therefore has to work from a cold cache on every request, because on a
+ * multi-instance host most requests land on an instance that has never seen this
+ * node. generateLocally is deterministic and does no I/O, so rebuilding is
+ * cheap and returns byte-identical content.
  */
 export async function resolveNode(nodeId: string): Promise<SandboxNode | null> {
   const authored = getStaticNode(nodeId);
@@ -25,7 +29,10 @@ export async function resolveNode(nodeId: string): Promise<SandboxNode | null> {
   const posting = await repo().getPosting(postingId);
   if (!posting) return null;
 
-  const brief = await repo().getBriefByPosting(postingId);
+  // Not getBriefByPosting: that is scoped to the owning SME, and the candidate
+  // taking this challenge never owns the posting. See the interface for why
+  // reading past that policy is safe here.
+  const brief = await repo().getReviewedBriefForChallenge(postingId);
   if (!brief || !brief.reviewed_by_employee) return null;
 
   const template = posting.template_id
@@ -47,12 +54,24 @@ export async function resolveNode(nodeId: string): Promise<SandboxNode | null> {
   return node;
 }
 
-/** The authored challenges plus every generated transition challenge. */
+/**
+ * The authored challenges plus every generated transition challenge.
+ *
+ * Derived from the open transition postings rather than from the memo, so the
+ * tree contains the same nodes on every instance. Reading the memo instead meant
+ * a transition challenge appeared only for whoever's process had generated it —
+ * an SME could build one, and the candidate hitting a different instance would
+ * not see it in the tree at all.
+ */
 export async function listAllNodes(): Promise<SandboxNode[]> {
-  const generated = await repo().listGeneratedChallenges();
+  const postings = await repo().listOpenTransitionPostings();
+  const generated = await Promise.all(
+    postings.map((posting) => resolveNode(transitionNodeId(posting.id))),
+  );
+
   return [
     ...SANDBOX_NODES,
-    ...generated.map((row) => row.payload as SandboxNode),
+    ...generated.filter((node): node is SandboxNode => node !== null),
   ];
 }
 

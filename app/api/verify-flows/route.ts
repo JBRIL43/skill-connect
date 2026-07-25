@@ -81,6 +81,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    // Simulates the cold instance that most requests actually land on. The
+    // generated-challenge store is a per-process memo, so a suite that only ever
+    // reads it warm cannot tell working code from code that depends on having
+    // generated the node itself moments earlier.
+    if (body.op === "mock:clear-generated") {
+      const { store } = await import("@/lib/data/mock/store");
+      const cleared = store().generatedChallenges.length;
+      store().generatedChallenges.length = 0;
+      return NextResponse.json({ cleared });
+    }
+
     if (body.op === "mock:set-brief-review") {
       const brief = await repo().getBriefByPosting(String(body.postingId));
       // Reading it back is impossible once unreviewed, by design, so the store

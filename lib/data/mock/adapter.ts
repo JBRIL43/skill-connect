@@ -168,6 +168,12 @@ export const mockRepository: DataRepository = {
     return store().postings.find((row) => row.id === postingId) ?? null;
   },
 
+  async listOpenTransitionPostings() {
+    return store().postings.filter(
+      (row) => row.is_transition_role && row.status === "open",
+    );
+  },
+
   async getPostingByTemplate(templateId) {
     return (
       store().postings.find((row) => row.template_id === templateId) ?? null
@@ -278,6 +284,16 @@ export const mockRepository: DataRepository = {
     );
   },
 
+  // Mirrors the supabase adapter's elevated read: reviewed-only, but not scoped
+  // to the owning SME, because the candidate taking the challenge never owns it.
+  async getReviewedBriefForChallenge(postingId) {
+    return (
+      store().continuityBriefs.find(
+        (row) => row.posting_id === postingId && row.reviewed_by_employee,
+      ) ?? null
+    );
+  },
+
   async listReviewedBriefsBySme(smeId) {
     const postingIds = new Set(
       store()
@@ -298,10 +314,6 @@ export const mockRepository: DataRepository = {
     return (
       store().generatedChallenges.find((row) => row.node_id === nodeId) ?? null
     );
-  },
-
-  async listGeneratedChallenges() {
-    return store().generatedChallenges;
   },
 
   async saveGeneratedChallenge(challenge: GeneratedChallenge) {

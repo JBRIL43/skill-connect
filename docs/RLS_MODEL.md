@@ -107,16 +107,23 @@ scores, that neither another candidate nor an SME nor an anonymous caller can,
 that public surfaces like company profiles still work, and that a job seeker
 cannot PATCH themselves to admin.
 
+It also builds its own fixtures for the three boundaries that no organic data
+reaches yet, and removes them afterwards:
+
+- An SME reading a `continuity_briefs` row on their own transition posting
+  before the employee has reviewed it — zero rows, then readable once
+  `reviewed_by_employee` flips. This is the one case where the owner is
+  deliberately locked out of their own data.
+- An SME reading another company's `notifications` and `payments` — zero rows.
+- A job seeker reading notifications *about themselves* — zero rows. A candidate
+  is not told which companies are watching their scores.
+
+The "second job seeker" is an account the suite creates itself
+(`rls-fixture-seeker@example.com`) rather than one of the demo logins. That
+matters: this check silently stopped testing anything once
+`sneaky.admin@example.com` was promoted to admin, because an admin is *supposed*
+to read every matrix. A test whose subject can change role is not a test.
+
 Run it after every migration and again at demo freeze. Policy drift is real, and
 a table added at 3am is exactly how a leak gets in. Any FAIL is a P0 that stops
 the build.
-
-Two cases the script does not yet cover, because they need data that does not
-exist until Dev 3's match engine and Dev 2's handover flow land:
-
-- An SME querying `continuity_briefs` for their own transition posting before
-  the employee has reviewed it. Must return zero rows.
-- An SME querying `notifications` or `payments` belonging to another company.
-  Must return zero rows.
-
-Add both to the script once those tables have rows.

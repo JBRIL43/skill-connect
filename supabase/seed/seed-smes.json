@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "smes": [
+    {
+      "key": "abeba-retail",
+      "company_name": "Abeba Retail",
+      "contact_name": "Abeba Mekonnen",
+      "email": "abeba.retail@seed.skillconnect.et",
+      "phone": "+251911234601",
+      "region": "Addis Ababa",
+      "industry": "Retail",
+      "size": "11-50",
+      "about": "Three shops around Piassa selling household electronics. Stock tracking is still on paper and we want to fix that.",
+      "verified": true,
+      "templates": [
+        {
+          "key": "inventory-assistant",
+          "role_name": "Retail Inventory Assistant",
+          "notify_on_match": true,
+          "thresholds": {
+            "excel_basics": 70,
+            "prompt_engineering": 75,
+            "customer_comms": 65
+          }
+        }
+      ],
+      "postings": [
+        {
+          "key": "inventory-assistant-q3",
+          "template_key": "inventory-assistant",
+          "description": "Keep stock counts accurate across three shops and answer customer questions on WhatsApp.",
+          "is_transition_role": false,
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "key": "nile-logistics",
+      "company_name": "Nile Logistics",
+      "contact_name": "Yonas Alemu",
+      "email": "nile.logistics@seed.skillconnect.et",
+      "phone": "+251911234602",
+      "region": "Bahir Dar",
+      "industry": "Logistics",
+      "size": "51-200",
+      "about": "Freight forwarding between Bahir Dar and Addis. Our dispatch coordinator is leaving in six weeks.",
+      "verified": false,
+      "templates": [
+        {
+          "key": "dispatch-coordinator",
+          "role_name": "Dispatch Coordinator",
+          "notify_on_match": true,
+          "thresholds": {
+            "task_accuracy": 80,
+            "communication": 70
+          }
+        }
+      ],
+      "postings": [
+        {
+          "key": "dispatch-coordinator-handover",
+          "template_key": "dispatch-coordinator",
+          "description": "Take over dispatch scheduling from an outgoing coordinator. Handover brief and custom challenge attached.",
+          "is_transition_role": true,
+          "status": "open"
+        }
+      ]
+    }
+  ]
+}

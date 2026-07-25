@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "job_seekers": [
+    {
+      "key": "meron-tadesse",
+      "full_name": "Meron Tadesse",
+      "email": "meron.tadesse@seed.skillconnect.et",
+      "phone": "+251911234501",
+      "region": "Addis Ababa",
+      "bio": "Ran the counter and the stock book at a family electronics shop in Merkato for two years. Comfortable with numbers, learning to put AI tools to work.",
+      "opt_in_discoverable": true,
+      "readiness_score": 74,
+      "skills": {
+        "technical": { "excel_basics": 71, "data_entry_accuracy": 78 },
+        "human": { "customer_comms": 82 }
+      },
+      "sandbox_scores": [
+        {
+          "node_id": "merkato-whatsapp-catalog",
+          "mode": "standard",
+          "scores": {
+            "prompt_engineering": 82,
+            "task_accuracy": 74,
+            "communication": 88,
+            "excel_basics": 71,
+            "customer_comms": 84
+          }
+        }
+      ],
+      "badges": [
+        { "node_id": "merkato-whatsapp-catalog", "badge_name": "Catalog Builder" }
+      ]
+    },
+    {
+      "key": "dawit-bekele",
+      "full_name": "Dawit Bekele",
+      "email": "dawit.bekele@seed.skillconnect.et",
+      "phone": "+251911234502",
+      "region": "Bahir Dar",
+      "bio": "Accounting diploma, one internship. Strong on spreadsheets, still building confidence talking to customers.",
+      "opt_in_discoverable": true,
+      "readiness_score": 66,
+      "skills": {
+        "technical": { "excel_basics": 88, "data_entry_accuracy": 84 },
+        "human": { "customer_comms": 58 }
+      },
+      "sandbox_scores": [
+        {
+          "node_id": "inventory-reconciliation",
+          "mode": "standard",
+          "scores": {
+            "prompt_engineering": 64,
+            "task_accuracy": 90,
+            "communication": 57,
+            "excel_basics": 88,
+            "customer_comms": 55
+          }
+        }
+      ],
+      "badges": [
+        { "node_id": "inventory-reconciliation", "badge_name": "Reconciler" }
+      ]
+    },
+    {
+      "key": "hanna-girma",
+      "full_name": "Hanna Girma",
+      "email": "hanna.girma@seed.skillconnect.et",
+      "phone": "+251911234503",
+      "region": "Hawassa",
+      "bio": "Two years on a hotel front desk. Handles people well under pressure; new to spreadsheets and AI tools.",
+      "opt_in_discoverable": false,
+      "readiness_score": 58,
+      "skills": {
+        "technical": { "excel_basics": 44 },
+        "human": { "customer_comms": 91 }
+      },
+      "sandbox_scores": [
+        {
+          "node_id": "customer-complaint-triage",
+          "mode": "pressure_simulation",
+          "scores": {
+            "prompt_engineering": 61,
+            "task_accuracy": 68,
+            "communication": 93,
+            "excel_basics": 44,
+            "customer_comms": 91
+          }
+        }
+      ],
+      "badges": [
+        { "node_id": "customer-complaint-triage", "badge_name": "Calm Under Pressure" }
+      ]
+    }
+  ]
+}

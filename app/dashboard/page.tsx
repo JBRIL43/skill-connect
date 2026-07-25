@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/page-header";
 import {
   Card,
   CardDescription,
@@ -57,36 +58,32 @@ export default async function DashboardPage() {
   const links = profile.role === "sme" ? SME_LINKS : JOB_SEEKER_LINKS;
 
   return (
-    <div className="min-h-svh bg-muted/30">
-      <AppHeader profile={profile} />
+    <AppShell profile={profile}>
+      <PageHeader
+        title={
+          profile.full_name
+            ? `Welcome, ${profile.full_name.split(" ")[0]}`
+            : "Welcome"
+        }
+        description={
+          profile.role === "sme"
+            ? "Find talent whose ability has been graded, not self-reported."
+            : "Build skills an AI economy still needs, and prove them with a score."
+        }
+      />
 
-      <main className="mx-auto max-w-6xl space-y-6 px-6 py-10">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {profile.full_name
-              ? `Welcome, ${profile.full_name.split(" ")[0]}`
-              : "Welcome"}
-          </h1>
-          <p className="text-muted-foreground">
-            {profile.role === "sme"
-              ? "Find talent whose ability has been graded, not self-reported."
-              : "Build skills an AI economy still needs, and prove them with a score."}
-          </p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {links.map((link) => (
-            <Link key={link.href} href={link.href} className="group">
-              <Card className="h-full transition-colors group-hover:border-foreground/30">
-                <CardHeader>
-                  <CardTitle className="text-base">{link.title}</CardTitle>
-                  <CardDescription>{link.description}</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </main>
-    </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {links.map((link) => (
+          <Link key={link.href} href={link.href} className="group">
+            <Card className="h-full transition-shadow group-hover:ring-foreground/25">
+              <CardHeader>
+                <CardTitle className="text-base">{link.title}</CardTitle>
+                <CardDescription>{link.description}</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        ))}
+      </div>
+    </AppShell>
   );
 }

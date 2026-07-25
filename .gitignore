@@ -40,8 +40,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# Local Dev 3 verification scratch
-.verify-*.sh
-.grade-payload.json
-.handover-payload.json

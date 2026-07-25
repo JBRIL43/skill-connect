@@ -104,6 +104,7 @@ Studio → Table Editor → `profiles`, or sign in as any account and visit
 .\scripts\test-rls.ps1                      # the security test suite — run after any migration
 .\scripts\verify-routing.ps1                # role routing — needs `npm run dev` in another terminal
 .\scripts\test-notifications.ps1            # the notification check — also needs a dev server
+.\scripts\verify-promote.ps1                # the invite-code path to admin — also needs a dev server
 .\scripts\run-sql.ps1 -Query "select 1;"    # ad-hoc SQL against the linked project
 ```
 
@@ -111,6 +112,11 @@ Studio → Table Editor → `profiles`, or sign in as any account and visit
 that an unreviewed handover brief is invisible even to the company that
 commissioned it, that one company cannot see another's notifications or
 payments, and that a job seeker cannot promote themselves to admin.
+
+`verify-promote.ps1` covers the deliberate hole in the middle of that: the invite
+code that does mint an admin, through the service role. It creates a throwaway
+account, checks a wrong code is refused, checks the real one works, and deletes
+the account again so no spare admin is left behind.
 
 `test-notifications.ps1` covers the contract Dev 3 calls into: an opted-out
 candidate is never surfaced, a cleared template files exactly one notification,

@@ -113,3 +113,39 @@ logs. The live database and both seed files are now on the frozen list, and
 
 `skills_json` on the skill matrix is a separate, free-form thing. Nothing in
 matching reads it.
+
+## Dev 1: public `/handover` prefix + signing secret (Dev 2 Phase 6)
+
+Outgoing employees may not have Skill-Connect accounts. The employee interview
+lives at `/handover/[postingId]?token=...` and is gated by an expiring HMAC
+token, not by Supabase Auth.
+
+Dev 1 needs:
+
+1. Add `"/handover"` to `PUBLIC_PREFIXES` in `lib/supabase/middleware.ts`.
+2. Document `HANDOVER_SIGNING_SECRET` in `.env.example` (server-only, min 16
+   characters). Dev 2 generates invite links with it.
+3. Confirm continuity brief writes stay on the service-role server path already
+   described in `docs/RLS_MODEL.md` (no client RLS write policy).
+
+Applied on `d2/ai-coach` so Phase 6 is demoable; please review/own the
+middleware and env-doc lines in the eventual merge.
+
+## Dev 3: frozen `raw_interview_json` shape (Dev 2 Phase 6)
+
+Source of truth: `lib/ai/handover.ts` (`rawInterviewJsonSchema`).
+
+```json
+{
+  "version": 1,
+  "locale": "en",
+  "completed_at": "2026-07-26T00:00:00.000Z",
+  "messages": [
+    { "role": "assistant", "content": "..." },
+    { "role": "user", "content": "..." }
+  ]
+}
+```
+
+Only consume rows where `reviewed_by_employee = true`. Never read unreviewed
+briefs, and never expose `raw_interview_json` to SME UI.

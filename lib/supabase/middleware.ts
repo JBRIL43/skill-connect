@@ -10,6 +10,10 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/company-profile",
   "/readiness",
+  // Token-gated outgoing-employee interview (Dev 2 Phase 6). Auth is enforced
+  // by HANDOVER_SIGNING_SECRET HMAC, not Supabase session. See
+  // docs/INTEGRATION_NOTES.md.
+  "/handover",
 ];
 
 function isPublic(pathname: string) {

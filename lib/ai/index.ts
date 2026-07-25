@@ -5,6 +5,18 @@ export {
   sanitizeRecommendations,
   streamConversation,
 } from "./engine";
+export {
+  BRIEF_SUMMARIZATION_PROMPT,
+  continuityBriefSchema,
+  formatContinuityBrief,
+  generateContinuityBriefDraft,
+  type ContinuityBriefDraft,
+} from "./handover-engine";
+export {
+  RAW_INTERVIEW_JSON_VERSION,
+  rawInterviewJsonSchema,
+  type RawInterviewJson,
+} from "./handover";
 export { promptForMode, SKILL_EXTRACTION_PROMPT } from "./prompts";
 export {
   detectRadarLanguage,

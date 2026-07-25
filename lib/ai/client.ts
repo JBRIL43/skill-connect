@@ -10,22 +10,26 @@ export async function streamConversationFromApi({
   messages,
   signal,
   onText,
+  endpoint = "/api/ai/chat",
+  extraBody,
 }: {
   mode: ConversationMode;
   messages: ConversationMessage[];
   signal?: AbortSignal;
   onText: (text: string) => void;
+  endpoint?: string;
+  extraBody?: Record<string, unknown>;
 }) {
-  const response = await fetch("/api/ai/chat", {
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     signal,
-    body: JSON.stringify({ mode, messages }),
+    body: JSON.stringify({ mode, messages, ...extraBody }),
   });
 
   const contentType = response.headers.get("content-type") ?? "";
   if (response.redirected || contentType.includes("text/html")) {
-    throw new Error("Sign in to use Ask Skill-Connect.");
+    throw new Error("Sign in to continue this conversation.");
   }
 
   if (!response.ok) {

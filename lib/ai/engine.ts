@@ -1,6 +1,6 @@
-import { openai } from "@ai-sdk/openai";
 import { generateText, Output, streamText, type ModelMessage } from "ai";
 
+import { getAiModel } from "./model";
 import { promptForMode, SKILL_EXTRACTION_PROMPT } from "./prompts";
 import {
   careerRecommendationSchema,
@@ -15,16 +15,6 @@ import {
   type SkillMatrixOutput,
 } from "./schemas";
 
-const MODEL = "gpt-4.1-mini";
-
-function model() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-
-  return openai(MODEL);
-}
-
 function toModelMessages(messages: ConversationMessage[]): ModelMessage[] {
   return messages.map(({ role, content }) => ({ role, content }));
 }
@@ -37,7 +27,7 @@ export function streamConversation({
   messages: ConversationMessage[];
 }) {
   return streamText({
-    model: model(),
+    model: getAiModel(),
     system: promptForMode(mode),
     messages: toModelMessages(messages),
     temperature: 0.4,
@@ -52,7 +42,7 @@ export async function extractSkillMatrix(
     .join("\n\n");
 
   const { output } = await generateText({
-    model: model(),
+    model: getAiModel(),
     system: SKILL_EXTRACTION_PROMPT,
     output: Output.object({
       name: "skill_matrix",
@@ -100,7 +90,7 @@ export async function recommendCareerPaths(
   }));
 
   const { output } = await generateText({
-    model: model(),
+    model: getAiModel(),
     system: RECOMMENDATION_PROMPT,
     output: Output.object({
       name: "career_recommendations",

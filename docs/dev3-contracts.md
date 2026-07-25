@@ -260,8 +260,11 @@ the two vocabularies still overlap, so this cannot regress quietly.
   problem fixed above every time the suite runs. It should write
   `ai_prompt_literacy`.
 - **`sneaky.admin@example.com` is now `role = 'admin'`.** The suite uses it as
-  the "other job seeker" for four `Assert-NoData` checks. An admin has read-all
-  policies, so those checks no longer test what their labels claim.
+  the "other job seeker" (`$other`) for two `Assert-NoData` checks. `0002` gives
+  admins read-all on both tables, and signed in as that account it returns 7
+  `skill_matrices` and 12 `sandbox_scores` — every row in the table. Those two
+  checks should be failing. `rls-fixture-seeker@example.com` already exists,
+  takes the same password, and returns 0/0/1, which is what they intended.
 
 ### Verifying without credentials
 

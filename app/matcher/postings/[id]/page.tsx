@@ -17,6 +17,7 @@ import type { MatchStatus } from "@/lib/data/types";
 import { competencyLabel } from "@/lib/sandbox/competencies";
 import { TONE, type Tone } from "@/lib/tones";
 
+import { HandoverChallengeForm } from "./handover-controls";
 import { MatchStatusForm, RunMatchForm } from "./match-controls";
 
 const STATUS_TONE: Record<MatchStatus, Tone> = {
@@ -51,9 +52,10 @@ export default async function PostingMatchesPage({
     ? await repo().getTemplate(posting.template_id)
     : null;
 
-  const [matches, labels] = await Promise.all([
+  const [matches, labels, brief] = await Promise.all([
     repo().listMatchesForPosting(posting.id),
     repo().listCandidateLabelsForPosting(posting.id, profile.id),
+    repo().getBriefByPosting(posting.id),
   ]);
 
   const labelById = new Map(labels.map((row) => [row.id, row]));
@@ -95,6 +97,52 @@ export default async function PostingMatchesPage({
         </div>
 
         <RunMatchForm postingId={posting.id} hasResults={matches.length > 0} />
+
+        {brief ? (
+          <Card className="panel">
+            <CardHeader>
+              <CardTitle>Score candidates on this actual job</CardTitle>
+              <CardDescription>
+                {brief.reviewed_by_employee
+                  ? "The person leaving this role recorded a handover interview and approved it for sharing. It can become a scored challenge, so a replacement is measured on the real work instead of a generic rubric."
+                  : "A handover interview exists but the departing employee has not approved it yet. Until they do, its contents stay private and it cannot become a challenge."}
+              </CardDescription>
+              <CardAction>
+                <Badge
+                  className={
+                    brief.reviewed_by_employee ? TONE.verified : TONE.neutral
+                  }
+                >
+                  {brief.reviewed_by_employee
+                    ? "Approved by employee"
+                    : "Awaiting approval"}
+                </Badge>
+              </CardAction>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              {/* Only the approved brief is ever rendered — an unreviewed one is
+                  unredacted, so its text never reaches an employer. */}
+              {brief.reviewed_by_employee ? (
+                <>
+                  {brief.generated_brief ? (
+                    <div className="panel-muted p-3">
+                      <p className="label-caps">Approved continuity brief</p>
+                      <p className="mt-1.5 text-xs leading-relaxed text-slate-300">
+                        {brief.generated_brief}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <HandoverChallengeForm
+                    postingId={posting.id}
+                    existingNodeId={brief.custom_node_id}
+                  />
+                </>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
 
         {matches.length === 0 ? (
           <Card className="panel">

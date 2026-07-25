@@ -37,7 +37,9 @@ function ChallengeNode({ data, selected }: NodeProps<ChallengeFlowNode>) {
         "w-[290px] cursor-pointer rounded-xl border bg-ink-900 p-4 text-left transition-colors",
         data.completed
           ? "border-verdant-500/50"
-          : "border-ink-700 hover:border-verdant-500/40",
+          : data.generated
+            ? "border-award-500/50 hover:border-award-400/70"
+            : "border-ink-700 hover:border-verdant-500/40",
         selected && "ring-2 ring-verdant-500/30",
       )}
     >
@@ -53,6 +55,12 @@ function ChallengeNode({ data, selected }: NodeProps<ChallengeFlowNode>) {
           </span>
         )}
       </div>
+
+      {data.generated ? (
+        <p className="mt-2 text-[11px] font-medium text-award-400">
+          Open role — scored on the actual job
+        </p>
+      ) : null}
 
       <h3 className="mt-2 text-sm font-semibold leading-snug text-slate-100">
         {data.title}

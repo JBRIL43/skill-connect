@@ -40,10 +40,26 @@ and a valid candidate session, the rules below still hold.
 
 Not filtered, not redacted — no policy grants them access, and a table with RLS
 enabled denies anything no policy allows. A company's only window onto a
-candidate is the `matches` table, which physically holds just three derived
-columns: `match_score`, `gap_analysis`, and `status`. RLS filters rows rather
-than columns, so instead of trying to hide columns we built a table that has no
-sensitive column to hide.
+candidate is the `matches` table, which physically holds only derived columns:
+`match_score`, `gap_analysis`, `status`, and the display label below. RLS filters
+rows rather than columns, so instead of trying to hide columns we built a table
+that has no sensitive column to hide.
+
+That has one awkward consequence, and it is worth saying how we resolved it. A
+ranked shortlist has to call each row something, and with no read on `profiles`
+there is no name to call it. The obvious fix — a `profiles` select policy gated
+on `sme_has_match_with()` — was rejected: because RLS cannot filter columns, any
+policy wide enough to expose `full_name` also hands over `phone` and `bio`, and
+column grants cannot help since a candidate has to be able to read their own
+phone.
+
+So the label became derived output too (`0006_match_candidate_label.sql`). A
+trigger writes `matches.candidate_label` on insert: the candidate's real name
+while `opt_in_discoverable` is true, and a stable `Candidate A` / `Candidate B`
+otherwise. Two properties follow. The SME cannot supply the label themselves —
+the trigger overwrites whatever they send — and opting out is retroactive: a
+second trigger on `profiles` takes the name back off every shortlist a company is
+already looking at. Anonymity is the guarantee, not the limitation.
 
 **2. Opt-in is enforced inside the database, not in the query we happened to
 write.**
@@ -66,6 +82,26 @@ signup trigger rewrites any role it does not recognise to `job_seeker`. Admin is
 granted out of band — either in Supabase Studio or through `/admin/promote`,
 which runs with the service role after checking a shared invite code.
 
+That last one is worth telling honestly, because our first version was wrong.
+RLS decides which *rows* you can touch, not which *columns*. The update policy
+correctly limited a user to their own profile row — but nothing stopped them
+from setting `role = 'admin'` on it. A single PATCH request was a route to the
+admin console.
+
+The fix in `0005_column_grants.sql` is a Postgres column grant rather than
+another policy:
+
+```sql
+revoke update on public.profiles from authenticated, anon;
+grant update (full_name, bio, phone, region, opt_in_discoverable)
+  on public.profiles to authenticated;
+```
+
+Row security and column security are different tools and you need both. The
+same pattern now protects `matches.match_score` and `matches.gap_analysis`, so
+an SME can drive the shortlist/hire action without being able to rewrite the
+score the engine gave a candidate.
+
 ## Why the helper functions are `SECURITY DEFINER`
 
 A policy on `profiles` that queries `profiles` recurses forever. `is_admin()`,
@@ -76,16 +112,34 @@ from `public` and granted only to `authenticated`.
 
 ## How to verify it
 
-Run these as QA before demo freeze, twice — once mid-build and once on the final
-schema, because policy drift is real.
+```powershell
+.\scripts\test-rls.ps1
+```
 
-1. Sign in as job seeker A. Query job seeker B's `skill_matrices` and
-   `sandbox_scores` directly. Both must return zero rows.
-2. Sign in as a company. Query `skill_matrices` for a candidate who already
-   matched to one of your postings. Must return zero rows.
-3. Sign in as a company. Query `continuity_briefs` for your own transition
-   posting before the employee has reviewed it. Must return zero rows.
-4. Sign in as a company. Query `notifications` and `payments` belonging to
-   another company. Must return zero rows.
+The suite signs in as a real job seeker, a second job seeker, and an SME, then
+queries the database directly over the REST API — bypassing our UI entirely, the
+way an attacker would. It checks that a candidate can read their own matrix and
+scores, that neither another candidate nor an SME nor an anonymous caller can,
+that public surfaces like company profiles still work, and that a job seeker
+cannot PATCH themselves to admin.
 
-Anything that returns data here is a P0 and stops the build.
+It also builds its own fixtures for the three boundaries that no organic data
+reaches yet, and removes them afterwards:
+
+- An SME reading a `continuity_briefs` row on their own transition posting
+  before the employee has reviewed it — zero rows, then readable once
+  `reviewed_by_employee` flips. This is the one case where the owner is
+  deliberately locked out of their own data.
+- An SME reading another company's `notifications` and `payments` — zero rows.
+- A job seeker reading notifications *about themselves* — zero rows. A candidate
+  is not told which companies are watching their scores.
+
+The "second job seeker" is an account the suite creates itself
+(`rls-fixture-seeker@example.com`) rather than one of the demo logins. That
+matters: this check silently stopped testing anything once
+`sneaky.admin@example.com` was promoted to admin, because an admin is *supposed*
+to read every matrix. A test whose subject can change role is not a test.
+
+Run it after every migration and again at demo freeze. Policy drift is real, and
+a table added at 3am is exactly how a leak gets in. Any FAIL is a P0 that stops
+the build.

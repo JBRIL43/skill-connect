@@ -1,0 +1,71 @@
+{
+  "version": 2,
+  "_vocabulary": "Every key under templates[].thresholds MUST be one of the six in lib/sandbox/competencies.ts: ai_prompt_literacy, task_accuracy, customer_comms, data_tools, process_thinking, adaptability. A threshold on any other key can never be met, so the template matches nobody and the SME sees an empty list with nothing logged.",
+  "smes": [
+    {
+      "key": "abeba-retail",
+      "company_name": "Abeba Retail",
+      "contact_name": "Abeba Mekonnen",
+      "email": "abeba.retail@seed.skillconnect.et",
+      "phone": "+251911234601",
+      "region": "Addis Ababa",
+      "industry": "Retail",
+      "size": "11-50",
+      "about": "Three shops around Piassa selling household electronics. Stock tracking is still on paper and we want to fix that.",
+      "verified": true,
+      "templates": [
+        {
+          "key": "inventory-assistant",
+          "role_name": "Retail Inventory Assistant",
+          "notify_on_match": true,
+          "thresholds": {
+            "data_tools": 70,
+            "ai_prompt_literacy": 75,
+            "customer_comms": 65
+          }
+        }
+      ],
+      "postings": [
+        {
+          "key": "inventory-assistant-q3",
+          "template_key": "inventory-assistant",
+          "description": "Keep stock counts accurate across three shops and answer customer questions on WhatsApp.",
+          "is_transition_role": false,
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "key": "nile-logistics",
+      "company_name": "Nile Logistics",
+      "contact_name": "Yonas Alemu",
+      "email": "nile.logistics@seed.skillconnect.et",
+      "phone": "+251911234602",
+      "region": "Bahir Dar",
+      "industry": "Logistics",
+      "size": "51-200",
+      "about": "Freight forwarding between Bahir Dar and Addis. Our dispatch coordinator is leaving in six weeks.",
+      "verified": false,
+      "templates": [
+        {
+          "key": "dispatch-coordinator",
+          "role_name": "Dispatch Coordinator",
+          "notify_on_match": true,
+          "thresholds": {
+            "task_accuracy": 80,
+            "customer_comms": 70
+          }
+        }
+      ],
+      "postings": [
+        {
+          "key": "dispatch-coordinator-handover",
+          "template_key": "dispatch-coordinator",
+          "description": "Take over dispatch scheduling from an outgoing coordinator. Handover brief and custom challenge attached.",
+          "is_transition_role": true,
+          "status": "open"
+        }
+      ]
+    }
+  ]
+}

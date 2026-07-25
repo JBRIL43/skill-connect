@@ -34,9 +34,16 @@ yarn-error.log*
 .env*
 !.env.example
 
+# supabase cli local state — the pooler url here embeds the db password
+supabase/.temp
+supabase/.branches
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
+.env*

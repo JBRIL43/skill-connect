@@ -18,6 +18,7 @@ import sys
 
 SCHEMA_SQL = open("supabase/migrations/0001_initial_schema.sql").read()
 POLICY_SQL = open("supabase/migrations/0002_rls_policies.sql").read()
+GRANT_SQL = open("supabase/migrations/0005_column_grants.sql").read()
 TS = open("lib/types/database.ts").read()
 ADAPTER = open("lib/data/supabase/adapter.ts").read()
 
@@ -241,12 +242,86 @@ def check_rls() -> None:
     print(f"  rls assumptions:          {len(dev3_tables)} tables, 4 denials, {len(required)} grants")
 
 
+def check_column_grants() -> None:
+    """0005 revokes table-wide UPDATE and grants it back column by column.
+
+    RLS filters rows, not columns, so this is invisible to every other check
+    here: a session-client write to a non-granted column passes types, passes
+    policy, and is refused only by the live database.
+    """
+    restricted = set(
+        re.findall(
+            r"revoke update on public\.(\w+) from[^;]*authenticated", GRANT_SQL, re.I
+        )
+    )
+    granted: dict[str, set[str]] = {}
+    for m in re.finditer(
+        r"grant update\s*\(([^)]+)\)\s*on public\.(\w+) to[^;]*authenticated",
+        GRANT_SQL,
+        re.I,
+    ):
+        cols = {c.strip() for c in m.group(1).split(",") if c.strip()}
+        granted.setdefault(m.group(2), set()).update(cols)
+
+    # Split the adapter into methods so a write can be attributed to a client.
+    methods = []
+    starts = [(m.start(), m.group(1)) for m in re.finditer(r"\n  async (\w+)", ADAPTER)]
+    for i, (pos, name) in enumerate(starts):
+        end = starts[i + 1][0] if i + 1 < len(starts) else len(ADAPTER)
+        methods.append((name, pos, ADAPTER[pos:end]))
+
+    checked = 0
+    for name, pos, body in methods:
+        for um in re.finditer(r"\.update\(\s*\{(.*?)\}\s*\)", body, re.S):
+            # The table is whichever .from() most recently preceded this write.
+            befores = list(re.finditer(r'\.from\("(\w+)"\)', body[: um.start()]))
+            if not befores:
+                continue
+            table = befores[-1].group(1)
+            if table not in restricted:
+                continue
+
+            cols = set(re.findall(r"(\w+)\s*:", um.group(1)))
+            if not cols:
+                continue
+            checked += 1
+
+            # Nearest preceding client wins; `client` resolves to its assignment.
+            prefix = body[: um.start()]
+            uses_elevated = bool(re.search(r"=\s*elevated\(\)|\belevated\(\)", prefix))
+            uses_session = bool(re.search(r"=\s*await db\(\)|\(await db\(\)\)", prefix))
+            elevated_write = uses_elevated and not uses_session
+
+            allowed = granted.get(table, set())
+            forbidden = cols - allowed
+            line_no = ADAPTER[: pos + um.start()].count("\n") + 1
+
+            if forbidden and not elevated_write:
+                failures.append(
+                    f"grants: {name}() at line {line_no} writes "
+                    f"{table}.{{{', '.join(sorted(forbidden))}}} on the session client, "
+                    f"but 0005 grants authenticated only {{{', '.join(sorted(allowed))}}} — "
+                    "this is refused by the live database, use the service role"
+                )
+            elif not forbidden and elevated_write:
+                failures.append(
+                    f"grants: {name}() at line {line_no} uses the service role to write "
+                    f"{table}.{{{', '.join(sorted(cols))}}}, which authenticated is "
+                    "already granted — prefer the session client so RLS still applies"
+                )
+
+    print(
+        f"  column grants:            {len(restricted)} restricted tables, {checked} writes"
+    )
+
+
 def main() -> int:
     print("Checking the Dev 1 / Dev 3 seam")
     sql_tables = parse_sql_tables()
     check_types(sql_tables)
     check_adapter(sql_tables)
     check_rls()
+    check_column_grants()
     print("")
 
     if failures:

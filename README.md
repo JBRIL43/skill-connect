@@ -20,29 +20,54 @@ The app runs at http://localhost:3000.
 `.env.local` is gitignored. Never commit real credentials — `.env.example` is
 the only env file that belongs in git.
 
-## Database setup
+## Database
 
-Migrations live in `supabase/migrations` and run in filename order. Apply them
-by pasting each file into the Supabase Studio SQL editor, oldest first:
+The Supabase project is already provisioned and all migrations are applied. You
+only need the URL and anon key in your `.env.local` to start building — ask
+Dev 1 on the secrets channel.
+
+Migrations live in `supabase/migrations` and run in filename order:
 
 | File | What it does |
 | --- | --- |
 | `0001_initial_schema.sql` | Extensions, enums, all 11 tables, RLS enabled with no policies (deny-all) |
 | `0002_rls_policies.sql` | The access rules from Section 9 of the spec |
 | `0003_auth_signup_trigger.sql` | Creates the profile row (and an SME's company profile) on signup |
+| `0004_auto_enable_rls_trigger.sql` | Event trigger forcing RLS on any future `public` table |
+| `0005_column_grants.sql` | Column-level grants, so a user cannot edit their own `role` |
 
-Two settings to check in the Supabase dashboard afterwards:
+Dev 1 applies new migrations with `npx supabase db push`. Nobody else should
+create files in this folder.
 
-- **Authentication → Providers → Email**: turn *Confirm email* off, so the demo
-  never waits on an inbox.
-- **Database → Extensions**: confirm `vector` is enabled. `0001` enables it, but
-  it is worth eyeballing since the match engine depends on it.
+### Test accounts
 
-### Creating the first admin
+Password for all three is `Test1234!`.
 
-Admin is never self-serve. Either flip a seed user's `role` to `admin` in
-Supabase Studio → Table Editor → `profiles`, or sign in as any account and visit
+| Email | Role | Lands on |
+| --- | --- | --- |
+| `selam.seeker@example.com` | job_seeker | `/dashboard` |
+| `abeba.sme@example.com` | sme | `/dashboard` (SME view) |
+| `sneaky.admin@example.com` | admin | `/admin` |
+
+Email confirmation is turned off on this project, so new signups work
+immediately without waiting on an inbox.
+
+### Creating another admin
+
+Admin is never self-serve. Either flip a user's `role` to `admin` in Supabase
+Studio → Table Editor → `profiles`, or sign in as any account and visit
 `/admin/promote` with the `ADMIN_INVITE_CODE` from `.env.local`.
+
+## Scripts
+
+```powershell
+.\scripts\test-rls.ps1                      # the security test suite — run after any migration
+.\scripts\run-sql.ps1 -Query "select 1;"    # ad-hoc SQL against the linked project
+```
+
+`test-rls.ps1` checks that candidates see their own data, that nobody else can,
+that public surfaces still work, and that a job seeker cannot promote themselves
+to admin. Any FAIL is a P0 and stops the build.
 
 ## Folder ownership
 

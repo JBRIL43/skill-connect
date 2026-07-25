@@ -337,10 +337,13 @@ export const supabaseRepository: DataRepository = {
     );
   },
 
-  // Stays on the caller's session: owns_posting() gates it to the SME's own
-  // postings, which is a tighter guarantee than the service role would give.
+  // Service role, because 0005 revokes update on matches from authenticated and
+  // grants back only `status`. match_score and gap_analysis are the engine's
+  // output and are deliberately not the caller's to write — the same reason the
+  // scoring reads are elevated. Ownership is enforced by the action that calls
+  // this, not by RLS, so runMatch must stay behind requireOwnedPosting.
   async upsertMatch(input: MatchInput) {
-    const client = await db();
+    const client = elevated();
 
     const existing = unwrap<Match>(
       await client
@@ -378,6 +381,8 @@ export const supabaseRepository: DataRepository = {
     return row;
   },
 
+  // Stays on the caller's session: `status` is the one column 0005 grants an
+  // SME, and owns_posting() keeps them to their own postings.
   async setMatchStatus(matchId, status: MatchStatus) {
     return unwrap<Match>(
       await (await db())

@@ -66,6 +66,26 @@ signup trigger rewrites any role it does not recognise to `job_seeker`. Admin is
 granted out of band — either in Supabase Studio or through `/admin/promote`,
 which runs with the service role after checking a shared invite code.
 
+That last one is worth telling honestly, because our first version was wrong.
+RLS decides which *rows* you can touch, not which *columns*. The update policy
+correctly limited a user to their own profile row — but nothing stopped them
+from setting `role = 'admin'` on it. A single PATCH request was a route to the
+admin console.
+
+The fix in `0005_column_grants.sql` is a Postgres column grant rather than
+another policy:
+
+```sql
+revoke update on public.profiles from authenticated, anon;
+grant update (full_name, bio, phone, region, opt_in_discoverable)
+  on public.profiles to authenticated;
+```
+
+Row security and column security are different tools and you need both. The
+same pattern now protects `matches.match_score` and `matches.gap_analysis`, so
+an SME can drive the shortlist/hire action without being able to rewrite the
+score the engine gave a candidate.
+
 ## Why the helper functions are `SECURITY DEFINER`
 
 A policy on `profiles` that queries `profiles` recurses forever. `is_admin()`,
@@ -76,16 +96,27 @@ from `public` and granted only to `authenticated`.
 
 ## How to verify it
 
-Run these as QA before demo freeze, twice — once mid-build and once on the final
-schema, because policy drift is real.
+```powershell
+.\scripts\test-rls.ps1
+```
 
-1. Sign in as job seeker A. Query job seeker B's `skill_matrices` and
-   `sandbox_scores` directly. Both must return zero rows.
-2. Sign in as a company. Query `skill_matrices` for a candidate who already
-   matched to one of your postings. Must return zero rows.
-3. Sign in as a company. Query `continuity_briefs` for your own transition
-   posting before the employee has reviewed it. Must return zero rows.
-4. Sign in as a company. Query `notifications` and `payments` belonging to
-   another company. Must return zero rows.
+The suite signs in as a real job seeker, a second job seeker, and an SME, then
+queries the database directly over the REST API — bypassing our UI entirely, the
+way an attacker would. It checks that a candidate can read their own matrix and
+scores, that neither another candidate nor an SME nor an anonymous caller can,
+that public surfaces like company profiles still work, and that a job seeker
+cannot PATCH themselves to admin.
 
-Anything that returns data here is a P0 and stops the build.
+Run it after every migration and again at demo freeze. Policy drift is real, and
+a table added at 3am is exactly how a leak gets in. Any FAIL is a P0 that stops
+the build.
+
+Two cases the script does not yet cover, because they need data that does not
+exist until Dev 3's match engine and Dev 2's handover flow land:
+
+- An SME querying `continuity_briefs` for their own transition posting before
+  the employee has reviewed it. Must return zero rows.
+- An SME querying `notifications` or `payments` belonging to another company.
+  Must return zero rows.
+
+Add both to the script once those tables have rows.

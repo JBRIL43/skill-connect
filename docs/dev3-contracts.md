@@ -174,11 +174,10 @@ assuming:
   render a page, which costs us the offline demo fallback. Auth is untouched in
   supabase mode.
 
-**4. A latent font bug, not fixed properly.** `@theme inline` defines
-`--font-sans: var(--font-sans)`, which is self-referential, so `font-sans` emits
-nothing and `Noto_Sans_Ethiopic` never applies — meaning tofu boxes for Amharic,
-the exact risk the comment in `app/layout.tsx` calls out. `app/globals.css` now
-names the loader variables on `body` as a stopgap. The real fix is Dev 1's.
+**4. ~~A latent font bug~~ — fixed by Dev 1 in `177e01a`.** `--font-sans` was
+self-referential, so `font-sans` emitted nothing and Amharic fell back to tofu
+boxes. Dev 1 fixed it at the root; the `body` stopgap in `app/globals.css` has
+been removed.
 
 **5. Please don't force-push `d1/foundation`.** Dev 3's branch is based on it
 directly because it is not yet merged to `main`. Merging it to `main` is welcome.
@@ -187,13 +186,86 @@ No file under `supabase/` was created or edited. That boundary was not crossed.
 
 ---
 
-## 8. Live Supabase verification — done statically, still owed against a real database
+## 8. Live Supabase verification — done
 
-Everything Dev 3 built has been verified against `NEXT_PUBLIC_DATA_SOURCE=mock`.
-Running it against the live schema needs the three Supabase keys, which Dev 1
-owns and which are still blank in `.env.local`, so the live pass is not done.
+Everything below ran against the live project with real signed-in sessions, not
+the service role, on migrations `0001`–`0005`. Three commands reproduce it:
 
-What is checkable without credentials is now a script — `npm run check:contracts`
+| Command | Covers | Result |
+| --- | --- | --- |
+| `npm run check:contracts` | static drift between the migrations and Dev 3's code | 4 checks pass |
+| `npm run verify:live` | RLS as real users, incl. the four QA probes | 24 checks pass |
+| `npm run verify:flows` | grade, match, notify, handover through the real actions | 25 checks pass |
+
+`verify:flows` needs `next dev` running with `NEXT_PUBLIC_DATA_SOURCE=supabase`.
+Note that an exported `NEXT_PUBLIC_DATA_SOURCE` in the launching shell silently
+beats `.env.local`; the script now refuses to run if it detects mock personas,
+because otherwise every check passes for the wrong reason.
+
+### What the live run caught
+
+**A privilege violation, now fixed.** `0005` revokes table-wide `update` and
+grants `authenticated` only `matches.status`. `upsertMatch()` wrote
+`match_score` and `gap_analysis` through the caller's session, so re-running a
+match was refused by the database — invisible in mock mode and invisible to
+every static check, because RLS filters rows and grants filter columns. The
+engine's own output now goes through the service role, with ownership enforced
+by `requireOwnedPosting` in the action rather than by RLS. `setMatchStatus`
+stays on the session client, since `status` is exactly what an SME is granted.
+`check-contracts.py` now parses `0005` and cross-checks every adapter update
+against the granted columns in both directions.
+
+**The seeded data used the un-reconciled vocabulary.** Live
+`sandbox_scores` and `role_skill_templates` were written with
+`prompt_engineering`, `communication`, and `excel_basics` — section 1 of this
+document is precisely about why that cannot work. `normalizeScores()` drops
+unknown keys, so both seeded templates matched zero candidates, with no error
+anywhere. [scripts/normalize-seed-vocabulary.sql](../scripts/normalize-seed-vocabulary.sql)
+remaps them onto the frozen keys and is idempotent. `verify:live` now asserts
+the two vocabularies still overlap, so this cannot regress quietly.
+
+### Confirmed against real policies
+
+- **All four QA probes** from [RLS_MODEL.md](RLS_MODEL.md) return nothing: a job
+  seeker cannot read another's `skill_matrices` or `sandbox_scores`, an SME
+  cannot read either for any candidate, `continuity_briefs` are invisible to the
+  wrong SME and to every job seeker, and no SME sees another's notifications or
+  payments. Anonymous reads of `profiles` and `sandbox_scores` are empty.
+- **The service-role split is necessary, not defensive.** Each of the three
+  elevated operations was confirmed to fail as a normal session: an SME reading
+  candidate scores, an SME reading candidate profiles, and a user inserting a
+  notification.
+- **Column grants behave as intended.** A job seeker cannot PATCH themselves to
+  `role = 'admin'`, and can still set their own `opt_in_discoverable`.
+- **The full Pillar 3 loop works live**: grading writes a score under the
+  candidate's own session, matching ranks real candidates and stores a gap
+  analysis, re-running updates rather than duplicating, an SME cannot run a
+  match on someone else's posting, shortlisting persists, and a reviewed brief
+  becomes a scored challenge whose node id is written back.
+- **The notification rules hold**: clearing a template notifies its owner
+  unseen, re-grading does not duplicate, and a candidate who has not opted in is
+  never evaluated.
+
+### Still not exercised
+
+- **`pgvector`.** Every seeded `embedding` is `null`, so
+  `lib/matcher/semantic.ts` has still only ever run its token-overlap fallback.
+  This needs Dev 2's embeddings before it means anything.
+- **The `0003` signup trigger**, beyond the accounts that already existed.
+
+### Two things for Dev 1
+
+- **`scripts/test-rls.ps1` re-seeds the old vocabulary.** It inserts
+  `scores_json = @{ prompt_engineering = 82 }`, which reintroduces exactly the
+  problem fixed above every time the suite runs. It should write
+  `ai_prompt_literacy`.
+- **`sneaky.admin@example.com` is now `role = 'admin'`.** The suite uses it as
+  the "other job seeker" for four `Assert-NoData` checks. An admin has read-all
+  policies, so those checks no longer test what their labels claim.
+
+### Verifying without credentials
+
+`npm run check:contracts`
 ([scripts/check-contracts.py](../scripts/check-contracts.py)). It reads the
 migrations and fails on drift in three places that nothing else catches:
 
@@ -201,29 +273,22 @@ migrations and fails on drift in three places that nothing else catches:
   hand-maintained, so a rename silently makes every downstream type wrong.
   Currently 11 tables and 75 columns, all matching.
 - **`lib/data/supabase/adapter.ts` against the schema.** 40 queries across 10
-  tables and 60 column references, all valid. This code has never run against a
-  real database, and under RLS a wrong column name in a filter returns an empty
-  array rather than an error.
+  tables and 60 column references, all valid. Under RLS a wrong column name in a
+  filter returns an empty array rather than an error, so this class of bug does
+  not announce itself.
 - **The four assumptions the service-role split rests on.** Each one asserts a
   policy does *not* exist. All four hold today: no SME select on
   `sandbox_scores`, no write policy on `continuity_briefs`, no insert policy on
   `notifications`, no SME select on `profiles`. If Dev 1 adds any of them, the
   script says which code path can be simplified rather than failing silently.
+- **Column grants from `0005`.** Every adapter `update` is checked against the
+  columns `authenticated` is actually granted, in both directions: a session
+  write to a forbidden column, and a service-role write where the session client
+  would have been tighter.
 
 It also confirms RLS is enabled on all 10 tables Dev 3 touches, that the nine
 request-scoped operations each have a matching policy, and that
 `sme_has_match_with()` still checks `opt_in_discoverable` itself.
-
-**Still owed once the keys land**, because static analysis cannot cover it:
-
-- Apply the three migrations, set `NEXT_PUBLIC_DATA_SOURCE=supabase`, and re-run
-  grade, match, and handover against real policies.
-- The four QA probes in [RLS_MODEL.md](RLS_MODEL.md) section "How to verify it",
-  which need real signed-in sessions.
-- `pgvector` behaviour. `embedding` is `vector(1536)` and the mock adapter
-  stores `null`, so the semantic path in `lib/matcher/semantic.ts` has only ever
-  run on its token-overlap fallback.
-- Supabase's `auth.uid()` and the `0003` signup trigger.
 
 **One mock-only divergence to know about.** The mock adapter returns live
 references into its in-memory store, so a caller that mutates a returned row

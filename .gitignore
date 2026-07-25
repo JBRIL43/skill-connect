@@ -44,3 +44,7 @@ supabase/.branches
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local verification scratch
+__pycache__/
+.devserver.log

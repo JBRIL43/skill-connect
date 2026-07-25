@@ -184,3 +184,49 @@ names the loader variables on `body` as a stopgap. The real fix is Dev 1's.
 directly because it is not yet merged to `main`. Merging it to `main` is welcome.
 
 No file under `supabase/` was created or edited. That boundary was not crossed.
+
+---
+
+## 8. Live Supabase verification — done statically, still owed against a real database
+
+Everything Dev 3 built has been verified against `NEXT_PUBLIC_DATA_SOURCE=mock`.
+Running it against the live schema needs the three Supabase keys, which Dev 1
+owns and which are still blank in `.env.local`, so the live pass is not done.
+
+What is checkable without credentials is now a script — `npm run check:contracts`
+([scripts/check-contracts.py](../scripts/check-contracts.py)). It reads the
+migrations and fails on drift in three places that nothing else catches:
+
+- **`lib/types/database.ts` against `0001_initial_schema.sql`.** The mirror is
+  hand-maintained, so a rename silently makes every downstream type wrong.
+  Currently 11 tables and 75 columns, all matching.
+- **`lib/data/supabase/adapter.ts` against the schema.** 40 queries across 10
+  tables and 60 column references, all valid. This code has never run against a
+  real database, and under RLS a wrong column name in a filter returns an empty
+  array rather than an error.
+- **The four assumptions the service-role split rests on.** Each one asserts a
+  policy does *not* exist. All four hold today: no SME select on
+  `sandbox_scores`, no write policy on `continuity_briefs`, no insert policy on
+  `notifications`, no SME select on `profiles`. If Dev 1 adds any of them, the
+  script says which code path can be simplified rather than failing silently.
+
+It also confirms RLS is enabled on all 10 tables Dev 3 touches, that the nine
+request-scoped operations each have a matching policy, and that
+`sme_has_match_with()` still checks `opt_in_discoverable` itself.
+
+**Still owed once the keys land**, because static analysis cannot cover it:
+
+- Apply the three migrations, set `NEXT_PUBLIC_DATA_SOURCE=supabase`, and re-run
+  grade, match, and handover against real policies.
+- The four QA probes in [RLS_MODEL.md](RLS_MODEL.md) section "How to verify it",
+  which need real signed-in sessions.
+- `pgvector` behaviour. `embedding` is `vector(1536)` and the mock adapter
+  stores `null`, so the semantic path in `lib/matcher/semantic.ts` has only ever
+  run on its token-overlap fallback.
+- Supabase's `auth.uid()` and the `0003` signup trigger.
+
+**One mock-only divergence to know about.** The mock adapter returns live
+references into its in-memory store, so a caller that mutates a returned row
+would corrupt the store. The Supabase adapter returns fresh objects every read.
+No current code mutates a returned row, but a bug of that shape would be
+invisible in mock mode and appear only against the live database.

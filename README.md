@@ -39,6 +39,33 @@ Migrations live in `supabase/migrations` and run in filename order:
 Dev 1 applies new migrations with `npx supabase db push`. Nobody else should
 create files in this folder.
 
+## Deployment
+
+Live at **https://skill-connect-orcin.vercel.app** (Vercel project
+`skatephi-1690s-projects/skill-connect`).
+
+Deploys are pushed from a machine rather than triggered by Git. Vercel could not
+connect to `JBRIL43/skill-connect` because that needs a GitHub login connection
+on the Vercel account, and the repo belongs to Gibril — not worth unblocking
+mid-build, since a CLI deploy takes about ninety seconds:
+
+```powershell
+npx vercel --prod
+```
+
+The four server-side variables are already set on Production
+(`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_INVITE_CODE`). Dev 2 and Dev 3 will need to
+add their LLM key with `npx vercel env add OPENAI_API_KEY production` before
+their pillars work in production.
+
+Both test suites can be pointed at the live site, and should be before the demo:
+
+```powershell
+.\scripts\verify-routing.ps1     -BaseUrl https://skill-connect-orcin.vercel.app
+.\scripts\test-notifications.ps1 -BaseUrl https://skill-connect-orcin.vercel.app
+```
+
 ## Authentication
 
 Email and password only. Section 4 describes signing up with "email or phone",

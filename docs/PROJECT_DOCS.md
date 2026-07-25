@@ -194,7 +194,12 @@ created\_at      TIMESTAMP
 id              UUID PRIMARY KEY  
 user\_id         UUID REFERENCES profiles(id)  
 node\_id         TEXT              \-- which sandbox challenge was completed  
-scores\_json     JSONB             \-- {"prompt\_engineering": 82, "task\_accuracy": 74, "communication": 88}  
+scores\_json     JSONB             \-- {"ai\_prompt\_literacy": 82, "task\_accuracy": 74, "customer\_comms": 88}  
+                                  \-- NOTE: this brief gives two different score vocabularies — the one
+                                  \-- shown here and the excel\_basics / ai\_prompt\_literacy / customer\_comms
+                                  \-- of the Role Skill Template below. Matching compares the two blobs key
+                                  \-- by key, so they have to be one list. lib/sandbox/competencies.ts is
+                                  \-- that list and overrides this document. Keys shown above updated to it.  
 mode            ENUM ('standard', 'pressure\_simulation')  
 completed\_at    TIMESTAMP
 

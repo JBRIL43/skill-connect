@@ -290,11 +290,13 @@ export const supabaseRepository: DataRepository = {
   async listMatchesForPosting(postingId) {
     // Derived columns only. A candidate's skill matrix is never joined in here
     // (Section 9, point 1) — RLS is the second layer, not the only one.
+    // candidate_label is derived too: 0006 writes it from a trigger, so reading
+    // it here is not a read path onto profiles.
     return unwrapList<Match>(
       await (await db())
         .from("matches")
         .select(
-          "id, posting_id, candidate_id, match_score, gap_analysis, status, created_at",
+          "id, posting_id, candidate_id, match_score, gap_analysis, status, created_at, candidate_label, anonymous_label",
         )
         .eq("posting_id", postingId)
         .order("match_score", { ascending: false }),

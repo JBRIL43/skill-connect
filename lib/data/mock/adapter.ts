@@ -14,6 +14,7 @@ import type {
   Match,
   MatchStatus,
   Notification,
+  Profile,
   Role,
   RoleSkillTemplate,
   SandboxScore,
@@ -21,6 +22,16 @@ import type {
 
 const now = () => new Date().toISOString();
 const id = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
+
+/**
+ * What an SME is allowed to call a candidate. Real name only while they are
+ * discoverable; the fixed letter otherwise. Kept identical to the SQL in
+ * 0006_match_candidate_label.sql so mock and supabase modes agree on stage.
+ */
+const labelFor = (candidate: Profile | undefined, anonymous: string) =>
+  candidate?.opt_in_discoverable && candidate.full_name
+    ? candidate.full_name
+    : anonymous;
 
 export const mockRepository: DataRepository = {
   kind: "mock",
@@ -42,7 +53,15 @@ export const mockRepository: DataRepository = {
 
   async setOptInDiscoverable(userId, value) {
     const profile = store().profiles.find((row) => row.id === userId);
-    if (profile) profile.opt_in_discoverable = value;
+    if (!profile) return;
+    profile.opt_in_discoverable = value;
+
+    // Mirrors resync_match_labels() in 0006. Opting out has to take the name
+    // back from companies that already matched, not just stop future matches.
+    for (const match of store().matches) {
+      if (match.candidate_id !== userId) continue;
+      match.candidate_label = labelFor(profile, match.anonymous_label ?? "");
+    }
   },
 
   async listCompanyProfiles() {
@@ -186,10 +205,26 @@ export const mockRepository: DataRepository = {
       return existing;
     }
 
+    // Mirrors assign_match_labels() in 0006: the letter is fixed at insert so a
+    // candidate who later opts out gets the same one back rather than looking
+    // like a new person.
+    const anonymous = `Candidate ${String.fromCharCode(
+      65 +
+        (store().matches.filter((row) => row.posting_id === input.posting_id)
+          .length %
+          26),
+    )}`;
+
+    const candidate = store().profiles.find(
+      (row) => row.id === input.candidate_id,
+    );
+
     const row: Match = {
       id: id("match"),
       status: "suggested",
       created_at: new Date().toISOString(),
+      anonymous_label: anonymous,
+      candidate_label: labelFor(candidate, anonymous),
       ...input,
     };
     store().matches.push(row);

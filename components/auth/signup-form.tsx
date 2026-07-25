@@ -94,6 +94,23 @@ export function SignupForm() {
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor="phone">
+          Phone <span className="font-normal text-muted-foreground">(optional)</span>
+        </Label>
+        <Input
+          id="phone"
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="09XX XXX XXX"
+        />
+        <p className="text-xs text-muted-foreground">
+          Saved to your profile. Sign-in is by email — we do not send SMS codes.
+        </p>
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
         <Input
           id="password"

@@ -13,12 +13,17 @@ Three things can drift between developers without anything failing loudly:
 
 Run with: npm run check:contracts
 """
+import pathlib
 import re
 import sys
 
+MIGRATIONS = sorted(pathlib.Path("supabase/migrations").glob("*.sql"))
+
 SCHEMA_SQL = open("supabase/migrations/0001_initial_schema.sql").read()
 POLICY_SQL = open("supabase/migrations/0002_rls_policies.sql").read()
-GRANT_SQL = open("supabase/migrations/0005_column_grants.sql").read()
+# Column privileges are not all in 0005: 0006 revokes update on the two label
+# columns it adds. Read every migration so a later one cannot slip past.
+GRANT_SQL = "\n".join(p.read_text() for p in MIGRATIONS)
 TS = open("lib/types/database.ts").read()
 ADAPTER = open("lib/data/supabase/adapter.ts").read()
 
@@ -69,7 +74,36 @@ def parse_sql_tables() -> dict[str, dict[str, dict]]:
                 "default": "default" in low,
             }
         tables[table] = cols
+
+    apply_alters(tables)
     return tables
+
+
+def apply_alters(tables: dict[str, dict[str, dict]]) -> None:
+    """Fold `alter table ... add column` from later migrations into the schema.
+
+    0001 is not the whole schema. 0006 adds the two match label columns by
+    alter, and without this every one of them reads as drift in database.ts.
+    """
+    for path in MIGRATIONS:
+        for m in re.finditer(
+            r"alter table\s+(?:only\s+)?public\.(\w+)\s*(.*?);",
+            path.read_text(),
+            re.S | re.I,
+        ):
+            table, body = m.group(1), m.group(2)
+            if table not in tables:
+                continue
+            for clause in re.finditer(
+                r"add column\s+(?:if not exists\s+)?(\w+)\s+([^,]+)",
+                body,
+                re.I,
+            ):
+                name, rest = clause.group(1), clause.group(2).lower()
+                tables[table][name] = {
+                    "nullable": "not null" not in rest,
+                    "default": "default" in rest,
+                }
 
 
 def check_types(sql_tables) -> None:

@@ -17,6 +17,23 @@ function readString(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/**
+ * Ethiopian mobile numbers get typed as 0912…, 912… or +251912…. Store one
+ * canonical form so a later SMS integration or duplicate check has something
+ * consistent to work with. Anything unrecognised is kept as the user typed it
+ * rather than rejected — a wrong-looking phone should not block a signup.
+ */
+function normalizePhone(input: string) {
+  if (!input) return "";
+
+  const digits = input.replace(/[^\d+]/g, "");
+  const local = digits
+    .replace(/^\+?251/, "")
+    .replace(/^0/, "");
+
+  return /^[79]\d{8}$/.test(local) ? `+251${local}` : input;
+}
+
 export async function signUpAction(
   _prev: AuthState,
   formData: FormData,
@@ -26,6 +43,7 @@ export async function signUpAction(
   const fullName = readString(formData, "full_name");
   const companyName = readString(formData, "company_name");
   const roleInput = readString(formData, "role");
+  const phone = normalizePhone(readString(formData, "phone"));
 
   if (!email || !password) {
     return { error: "Email and password are required." };
@@ -45,10 +63,13 @@ export async function signUpAction(
     email,
     password,
     options: {
+      // The signup trigger reads these off raw_user_meta_data to build the
+      // profile row, so phone lands on the profile without a second write.
       data: {
         role,
         full_name: fullName,
         company_name: companyName,
+        phone,
       },
     },
   });

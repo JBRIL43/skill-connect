@@ -1,7 +1,6 @@
 import { store } from "@/lib/data/mock/store";
 import type {
   BadgeInput,
-  CandidateLabel,
   CompanyProfilePatch,
   DataRepository,
   MatchInput,
@@ -89,6 +88,18 @@ export const mockRepository: DataRepository = {
     return store().skillMatrices.find((row) => row.user_id === userId) ?? null;
   },
 
+  async savePostingEmbedding(postingId, vector) {
+    const posting = store().postings.find((row) => row.id === postingId);
+    if (posting) posting.embedding = vector;
+  },
+
+  async saveCandidateEmbedding(userId, vector) {
+    const matrix = store().skillMatrices.find((row) => row.user_id === userId);
+    if (!matrix) return false;
+    matrix.embedding = vector;
+    return true;
+  },
+
   async listSandboxScores(userId) {
     return store()
       .sandboxScores.filter((row) => row.user_id === userId)
@@ -167,29 +178,6 @@ export const mockRepository: DataRepository = {
     return store()
       .matches.filter((row) => row.posting_id === postingId)
       .sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0));
-  },
-
-  // Mirrors the supabase adapter's gate so mock mode cannot show a label the
-  // live path would withhold.
-  async listCandidateLabelsForPosting(postingId, smeId) {
-    const state = store();
-
-    const posting = state.postings.find((row) => row.id === postingId);
-    if (!posting || posting.sme_id !== smeId) return [];
-
-    const candidateIds = new Set(
-      state.matches
-        .filter((row) => row.posting_id === postingId)
-        .map((row) => row.candidate_id),
-    );
-
-    return state.profiles
-      .filter((row) => candidateIds.has(row.id) && row.opt_in_discoverable)
-      .map<CandidateLabel>((row) => ({
-        id: row.id,
-        full_name: row.full_name,
-        region: row.region,
-      }));
   },
 
   async upsertMatch(input: MatchInput) {
@@ -280,9 +268,13 @@ export const mockRepository: DataRepository = {
   },
 
   async getBriefByPosting(postingId) {
+    // Reviewed only, matching the supabase adapter. Mock is the demo-day
+    // fallback, so an unreviewed brief must be as unreachable here as it is
+    // live — otherwise the fallback is the one path that leaks it.
     return (
-      store().continuityBriefs.find((row) => row.posting_id === postingId) ??
-      null
+      store().continuityBriefs.find(
+        (row) => row.posting_id === postingId && row.reviewed_by_employee,
+      ) ?? null
     );
   },
 

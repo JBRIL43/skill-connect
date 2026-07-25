@@ -52,13 +52,11 @@ export default async function PostingMatchesPage({
     ? await repo().getTemplate(posting.template_id)
     : null;
 
-  const [matches, labels, brief] = await Promise.all([
+  const [matches, brief] = await Promise.all([
     repo().listMatchesForPosting(posting.id),
-    repo().listCandidateLabelsForPosting(posting.id, profile.id),
     repo().getBriefByPosting(posting.id),
   ]);
 
-  const labelById = new Map(labels.map((row) => [row.id, row]));
   const thresholds = Object.entries(template?.thresholds_json ?? {});
 
   return (
@@ -98,48 +96,39 @@ export default async function PostingMatchesPage({
 
         <RunMatchForm postingId={posting.id} hasResults={matches.length > 0} />
 
+        {/* getBriefByPosting returns reviewed briefs only, in both adapters, so
+            an unreviewed one is absent here rather than rendered in a hidden
+            state. Master checklist: "Continuity Briefs are unreachable until
+            reviewed_by_employee = true." */}
         {brief ? (
           <Card className="panel">
             <CardHeader>
               <CardTitle>Score candidates on this actual job</CardTitle>
               <CardDescription>
-                {brief.reviewed_by_employee
-                  ? "The person leaving this role recorded a handover interview and approved it for sharing. It can become a scored challenge, so a replacement is measured on the real work instead of a generic rubric."
-                  : "A handover interview exists but the departing employee has not approved it yet. Until they do, its contents stay private and it cannot become a challenge."}
+                The person leaving this role recorded a handover interview and
+                approved it for sharing. It can become a scored challenge, so a
+                replacement is measured on the real work instead of a generic
+                rubric.
               </CardDescription>
               <CardAction>
-                <Badge
-                  className={
-                    brief.reviewed_by_employee ? TONE.verified : TONE.neutral
-                  }
-                >
-                  {brief.reviewed_by_employee
-                    ? "Approved by employee"
-                    : "Awaiting approval"}
-                </Badge>
+                <Badge className={TONE.verified}>Approved by employee</Badge>
               </CardAction>
             </CardHeader>
 
             <CardContent className="space-y-4">
-              {/* Only the approved brief is ever rendered — an unreviewed one is
-                  unredacted, so its text never reaches an employer. */}
-              {brief.reviewed_by_employee ? (
-                <>
-                  {brief.generated_brief ? (
-                    <div className="panel-muted p-3">
-                      <p className="label-caps">Approved continuity brief</p>
-                      <p className="mt-1.5 text-xs leading-relaxed text-slate-300">
-                        {brief.generated_brief}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  <HandoverChallengeForm
-                    postingId={posting.id}
-                    existingNodeId={brief.custom_node_id}
-                  />
-                </>
+              {brief.generated_brief ? (
+                <div className="panel-muted p-3">
+                  <p className="label-caps">Approved continuity brief</p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-slate-300">
+                    {brief.generated_brief}
+                  </p>
+                </div>
               ) : null}
+
+              <HandoverChallengeForm
+                postingId={posting.id}
+                existingNodeId={brief.custom_node_id}
+              />
             </CardContent>
           </Card>
         ) : null}
@@ -158,8 +147,6 @@ export default async function PostingMatchesPage({
         ) : (
           <div className="space-y-4">
             {matches.map((match, index) => {
-              const label = labelById.get(match.candidate_id);
-
               return (
                 <Card key={match.id} className="panel">
                   <CardHeader>
@@ -167,15 +154,13 @@ export default async function PostingMatchesPage({
                       <span className="font-mono text-2xl text-verdant-400">
                         {match.match_score ?? 0}
                       </span>
+                      {/* Derived by 0006's trigger: their name only while they
+                          are discoverable, a stable letter otherwise. */}
                       <span>
-                        {label?.full_name ?? `Candidate ${index + 1}`}
+                        {match.candidate_label ?? `Candidate ${index + 1}`}
                       </span>
                     </CardTitle>
-                    <CardDescription>
-                      {label?.region
-                        ? `${label.region} · Match Score out of 100`
-                        : "Match Score out of 100"}
-                    </CardDescription>
+                    <CardDescription>Match Score out of 100</CardDescription>
                     <CardAction>
                       <Badge className={TONE[STATUS_TONE[match.status]]}>
                         {STATUS_LABEL[match.status]}

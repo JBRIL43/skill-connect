@@ -1,6 +1,5 @@
 import type {
   BadgeInput,
-  CandidateLabel,
   CompanyProfilePatch,
   DataRepository,
   MatchInput,
@@ -156,6 +155,39 @@ export const supabaseRepository: DataRepository = {
     );
   },
 
+  async savePostingEmbedding(postingId, vector) {
+    // The SME owns the posting, but 0005 does not grant them the embedding
+    // column, and the vector is engine output rather than something they typed.
+    const { error } = await elevated()
+      .from("sme_postings")
+      .update({ embedding: vector })
+      .eq("id", postingId);
+
+    if (error) throw new Error(error.message);
+  },
+
+  async saveCandidateEmbedding(userId, vector) {
+    const existing = unwrap<{ id: string }>(
+      await elevated()
+        .from("skill_matrices")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    );
+
+    if (!existing) return false;
+
+    const { error } = await elevated()
+      .from("skill_matrices")
+      .update({ embedding: vector })
+      .eq("id", existing.id);
+
+    if (error) throw new Error(error.message);
+    return true;
+  },
+
   async listSandboxScores(userId) {
     return unwrapList<SandboxScore>(
       await (await db())
@@ -300,42 +332,6 @@ export const supabaseRepository: DataRepository = {
         )
         .eq("posting_id", postingId)
         .order("match_score", { ascending: false }),
-    );
-  },
-
-  /**
-   * Cross-user, and the one place an SME learns who a candidate is. profiles has
-   * no SME select policy yet, so this enforces in code exactly what
-   * sme_has_match_with() enforces in SQL for badges: the SME must own the
-   * posting, a match must already exist, and the candidate must still be opted
-   * in. Replace this with a profiles policy when Dev 1 adds one.
-   */
-  async listCandidateLabelsForPosting(postingId, smeId) {
-    const client = elevated();
-
-    const posting = unwrap<{ sme_id: string }>(
-      await client
-        .from("sme_postings")
-        .select("sme_id")
-        .eq("id", postingId)
-        .maybeSingle(),
-    );
-    if (!posting || posting.sme_id !== smeId) return [];
-
-    const matches = unwrapList<{ candidate_id: string }>(
-      await client.from("matches").select("candidate_id").eq("posting_id", postingId),
-    );
-    if (matches.length === 0) return [];
-
-    return unwrapList<CandidateLabel>(
-      await client
-        .from("profiles")
-        .select("id, full_name, region")
-        .in(
-          "id",
-          matches.map((row) => row.candidate_id),
-        )
-        .eq("opt_in_discoverable", true),
     );
   },
 

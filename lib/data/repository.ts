@@ -51,17 +51,6 @@ export type CompanyProfilePatch = Partial<
 >;
 
 /**
- * The only identifying fields an SME ever sees about a candidate, and only for
- * candidates they already have a match with who opted in — the same condition
- * Dev 1's sme_has_match_with() uses to release badges.
- */
-export type CandidateLabel = {
-  id: string;
-  full_name: string | null;
-  region: string | null;
-};
-
-/**
  * The only surface Dev 3's routes and components are allowed to talk to.
  * Two implementations: `mock` (in-memory fixtures) and `supabase` (Dev 1's
  * live schema). Chosen by NEXT_PUBLIC_DATA_SOURCE.
@@ -85,6 +74,19 @@ export interface DataRepository {
 
   getSkillMatrix(userId: string): Promise<SkillMatrix | null>;
 
+  /**
+   * pgvector persistence for Section 3's semantic search. Service role in
+   * supabase mode: the match engine writes a candidate's vector, and a
+   * candidate's skill_matrices row is not the SME's to touch.
+   */
+  savePostingEmbedding(postingId: string, vector: number[]): Promise<void>;
+  /**
+   * False when the candidate has no skill_matrices row yet, which is the normal
+   * state for anyone who has done Sandbox challenges but not Dev 2's intake.
+   * A missing row is skipped, never created — the matrix is Pillar 1's to write.
+   */
+  saveCandidateEmbedding(userId: string, vector: number[]): Promise<boolean>;
+
   listSandboxScores(userId: string): Promise<SandboxScore[]>;
   listScoresForUsers(userIds: string[]): Promise<SandboxScore[]>;
   saveSandboxScore(input: SandboxScoreInput): Promise<SandboxScore>;
@@ -101,12 +103,12 @@ export interface DataRepository {
   getPosting(id: string): Promise<SmePosting | null>;
   getPostingByTemplate(templateId: string): Promise<SmePosting | null>;
 
+  /**
+   * Carries matches.candidate_label, which 0006 derives from a trigger: the
+   * candidate's name only while they are discoverable, a stable "Candidate A"
+   * otherwise. There is deliberately no read path onto profiles here.
+   */
   listMatchesForPosting(postingId: string): Promise<Match[]>;
-  /** Gated on the SME owning the posting and the candidate still opting in. */
-  listCandidateLabelsForPosting(
-    postingId: string,
-    smeId: string,
-  ): Promise<CandidateLabel[]>;
   upsertMatch(input: MatchInput): Promise<Match>;
   setMatchStatus(id: string, status: MatchStatus): Promise<Match | null>;
   countHiredBySme(smeId: string): Promise<number>;
@@ -119,6 +121,12 @@ export interface DataRepository {
   }): Promise<Notification | null>;
   markNotificationSeen(id: string): Promise<void>;
 
+  /**
+   * Reviewed briefs only. An unreviewed brief is not returned in a partial or
+   * redacted form — it is absent, so no caller can render one by forgetting a
+   * check. Master checklist: "Continuity Briefs are unreachable until
+   * reviewed_by_employee = true."
+   */
   getBriefByPosting(postingId: string): Promise<ContinuityBrief | null>;
   /** Reviewed briefs only — never expose one pre-redaction (Section 9, point 4). */
   listReviewedBriefsBySme(smeId: string): Promise<ContinuityBrief[]>;

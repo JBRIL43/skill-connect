@@ -246,8 +246,9 @@ def check_rls() -> None:
         )
     if (found := sme_policy("profiles", "select")):
         failures.append(
-            f'rls: profiles now has an SME select policy ("{found}") — the candidate '
-            "identity workaround in listCandidateLabelsForPosting can be simplified"
+            f'rls: profiles now has an SME select policy ("{found}") — 0006 derives '
+            "matches.candidate_label precisely so this policy would not be needed, "
+            "and RLS filters rows not columns, so this also exposes phone and bio"
         )
 
     # These must exist, or a request-scoped operation silently returns nothing.

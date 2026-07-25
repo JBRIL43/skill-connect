@@ -74,9 +74,7 @@ export async function POST(request: Request) {
     badge_name: node.badgeName,
   });
 
-  // Runs with the service role: it compares this candidate against every SME's
-  // thresholds, and a job seeker has no read on role_skill_templates.
-  const notifications = await runNotificationCheck(profile.id);
+  const notifications = await notifyAfterGrade(request, profile.id);
 
   return NextResponse.json({
     overall: result.overall,
@@ -84,7 +82,61 @@ export async function POST(request: Request) {
     summary: result.summary,
     source: result.source,
     badge: { badge_name: badge.badge_name },
-    notified: notifications.created.length,
-    optedOut: notifications.skippedOptOut,
+    notified: notifications.notified,
+    optedOut: notifications.optedOut,
   });
+}
+
+/**
+ * Dev 1 owns the notification check (Phase 5) and their route is the one that
+ * ships. It authenticates with a Supabase session, though, and mock mode has
+ * none — mock is the demo-day fallback and must keep firing the Pillar 3 beat,
+ * so the stand-in stays as the mock path rather than being deleted.
+ *
+ * Their route reads the *latest* score per competency where the match engine
+ * reads the *best*. A candidate who retries a challenge and scores lower can
+ * therefore be notified against one bar and ranked against another. Flagged to
+ * Dev 1; the engine keeps best, because a retry should not cost standing.
+ */
+async function notifyAfterGrade(
+  request: Request,
+  candidateId: string,
+): Promise<{ notified: number; optedOut: boolean }> {
+  if (repo().kind === "supabase") {
+    try {
+      const response = await fetch(
+        new URL("/api/notifications/check", request.url),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            // Their route resolves the caller from the session, so the cookie
+            // has to travel with the request.
+            cookie: request.headers.get("cookie") ?? "",
+          },
+          body: JSON.stringify({ candidate_id: candidateId }),
+        },
+      );
+
+      if (response.ok) {
+        const body = (await response.json()) as {
+          notified?: number;
+          skipped?: string;
+        };
+        return {
+          notified: body.notified ?? 0,
+          optedOut: body.skipped === "not_discoverable",
+        };
+      }
+
+      console.error(
+        `[grade] notifications/check returned ${response.status}; using the stand-in`,
+      );
+    } catch (error) {
+      console.error("[grade] notifications/check failed; using the stand-in", error);
+    }
+  }
+
+  const result = await runNotificationCheck(candidateId);
+  return { notified: result.created.length, optedOut: result.skippedOptOut };
 }

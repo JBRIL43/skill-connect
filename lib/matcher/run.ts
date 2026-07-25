@@ -1,7 +1,16 @@
 import { gapAnalysis } from "@/lib/ai/gap-analysis";
 import { repo } from "@/lib/data";
 import { bestScores, groupScoresByUser } from "@/lib/data/derive";
-import type { Profile, RoleSkillTemplate, SmePosting } from "@/lib/data/types";
+import type { Profile } from "@/lib/data/types";
+import {
+  embedTexts,
+  plannedSource,
+  type EmbeddingSource,
+} from "@/lib/matcher/embed";
+import {
+  candidateProfileText,
+  roleProfileText,
+} from "@/lib/matcher/profile-text";
 import { evaluateThresholds, matchScore } from "@/lib/matcher/score";
 import { semanticSignals } from "@/lib/matcher/semantic";
 
@@ -12,14 +21,51 @@ export type MatchRunResult = {
   considered: number;
   /** Candidates who cleared every threshold and now have a match row. */
   matched: number;
+  /** Which embedding provider ranked this run. */
+  embeddingSource: EmbeddingSource;
+  /**
+   * Candidate vectors actually stored. Lower than `matched` when a candidate
+   * has no skill_matrices row, which is expected before Pillar 1 intake.
+   */
+  embeddingsStored: number;
 };
 
 function firstName(profile: Profile): string {
   return profile.full_name?.trim().split(/\s+/)[0] ?? "This candidate";
 }
 
-function roleText(posting: SmePosting, template: RoleSkillTemplate): string {
-  return [template.role_name, posting.description ?? ""].join(". ");
+/**
+ * Writes the run's vectors into the columns Section 3 specifies. Never fatal:
+ * ranking already happened in memory, so a failed write costs the persistence
+ * this run and nothing the SME can see.
+ */
+async function persistEmbeddings(
+  postingId: string,
+  roleVector: number[],
+  candidates: { userId: string; vector: number[] }[],
+): Promise<number> {
+  let stored = 0;
+
+  try {
+    await repo().savePostingEmbedding(postingId, roleVector);
+  } catch (error) {
+    console.error("[matcher] could not store the posting vector", error);
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (await repo().saveCandidateEmbedding(candidate.userId, candidate.vector)) {
+        stored += 1;
+      }
+    } catch (error) {
+      console.error(
+        `[matcher] could not store a vector for ${candidate.userId}`,
+        error,
+      );
+    }
+  }
+
+  return stored;
 }
 
 /**
@@ -51,6 +97,8 @@ export async function runMatch(postingId: string): Promise<MatchRunResult> {
       templateName: template.role_name,
       considered: 0,
       matched: 0,
+      embeddingSource: plannedSource(),
+      embeddingsStored: 0,
     };
   }
 
@@ -77,16 +125,42 @@ export async function runMatch(postingId: string): Promise<MatchRunResult> {
       templateName: template.role_name,
       considered: candidates.length,
       matched: 0,
+      embeddingSource: plannedSource(),
+      embeddingsStored: 0,
     };
   }
 
-  // Additive only, and degrades to token overlap without an API key, so ranking
-  // never depends on the embedding call succeeding.
-  const semantic = await semanticSignals(
-    roleText(posting, template),
-    eligible.map((entry) => ({
+  // Section 3's semantic layer. Role and candidates go through one call so they
+  // share a provider and a calibration; mixing an OpenAI role vector with local
+  // candidate vectors would produce similarity scores that mean nothing.
+  //
+  // Recomputed each run rather than read back from the columns: a candidate's
+  // profile text is built from their scores, so a stored vector goes stale the
+  // moment they complete another challenge.
+  const { vectors, source } = await embedTexts([
+    roleProfileText(posting, template),
+    ...eligible.map((entry) =>
+      candidateProfileText(entry.scores, entry.rows),
+    ),
+  ]);
+
+  const [roleVector, ...candidateVectors] = vectors;
+
+  const semantic = semanticSignals(
+    roleVector,
+    eligible.map((entry, index) => ({
       id: entry.candidate.id,
-      text: [entry.candidate.bio ?? "", entry.candidate.region ?? ""].join(" "),
+      vector: candidateVectors[index],
+    })),
+    source,
+  );
+
+  const persisted = await persistEmbeddings(
+    posting.id,
+    roleVector,
+    eligible.map((entry, index) => ({
+      userId: entry.candidate.id,
+      vector: candidateVectors[index],
     })),
   );
 
@@ -117,5 +191,7 @@ export async function runMatch(postingId: string): Promise<MatchRunResult> {
     templateName: template.role_name,
     considered: candidates.length,
     matched: eligible.length,
+    embeddingSource: source,
+    embeddingsStored: persisted,
   };
 }

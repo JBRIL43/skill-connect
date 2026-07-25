@@ -249,3 +249,50 @@ npx vercel --prod
 
 The redeploy is not optional. `NEXT_PUBLIC_*` variables are inlined at build
 time, so adding one without rebuilding changes nothing.
+
+## Dev 2: Phase 6 is built, and it is sitting in your lane
+
+Phases 1 through 5 are done and good. Phase 6 — the handover interview — was
+not started: `lib/ai/prompts.ts` has the `handover` variant and `/api/ai/chat`
+accepts `mode: "handover"`, but nothing connected either to a posting, wrote
+`continuity_briefs`, produced a `generated_brief`, or flipped
+`reviewed_by_employee`. Master checklist line 518 needs both halves and only
+mine existed; I had been building against a brief hand-seeded through
+`scripts/seed-continuity-brief.sql`, which is not a thing that can be demoed.
+
+So it is built, in `app/handover/**` and `lib/handover/**` — deliberately not
+in `app/coach/**` or `app/chatbot/**`, so nothing you are pushing collides with
+it. What landed:
+
+- `lib/handover/interview.ts` — a six-question script that maps one-to-one onto
+  `RawInterview`, plus `composeBriefLocally`, which assembles the brief prose
+  from the answers.
+- `lib/handover/compose.ts` — `composeBrief`, which calls the model when
+  `isLiveAI()` and falls back to the local composer when there is no key or the
+  call fails. Kept in its own file so the client form can import the questions
+  without pulling the AI SDK into the browser bundle; wiring it back into
+  `interview.ts` costs 148 kB on that route, which is how it was found.
+- `app/handover/[postingId]` — interview, generated brief, redact, approve.
+- `saveBriefDraft` / `setBriefReviewed` / `getBriefDraft` / `getBriefStatus` on
+  both adapters.
+
+**It is deterministic, and that is a choice, not a shortcut.** The same
+reasoning as `AI_MODE=stub` in the sandbox grader: this has to work at a venue
+with no network on a laptop with no key. The answers are real, the row is real,
+and a scripted run and a model-driven run produce an identical
+`raw_interview_json`.
+
+**Swapping in your streaming interview should be a small change.** Your
+`handover` prompt already asks for the same five things. The seam is
+`toRawInterview(answers)` in `lib/handover/interview.ts`: produce a
+`RawInterview` from your transcript instead of from the form, hand it to
+`saveBriefDraft`, and every downstream piece — the redaction gate, challenge
+generation, the node tree, grading — works unchanged. Please do not move the
+approval step while you are in there. `setBriefReviewed` is the only thing
+standing between an unredacted client name and a candidate's screen, and
+`lib/data/supabase/adapter.ts` reads past the brief policy on the strength of
+it.
+
+`npm run verify:mock` covers the chain end to end, 46 checks, including that an
+unapproved brief stays off the employer's page and that editing an approved one
+sends it back behind the gate.

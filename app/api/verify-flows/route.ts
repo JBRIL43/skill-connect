@@ -17,10 +17,15 @@
 import { NextResponse } from "next/server";
 
 import {
+  approveBriefAction,
+  saveInterviewAction,
+} from "@/app/handover/actions";
+import {
   generateHandoverChallengeAction,
   runMatchAction,
   setMatchStatusAction,
 } from "@/app/matcher/actions";
+import { INTERVIEW_QUESTIONS } from "@/lib/handover/interview";
 import { currentProfile } from "@/lib/current-profile";
 import { repo } from "@/lib/data";
 
@@ -92,6 +97,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ cleared });
     }
 
+    // The fixtures ship one posting with a brief already on it, so the
+    // never-interviewed state cannot otherwise be reached to test.
+    if (body.op === "mock:drop-brief") {
+      const { store } = await import("@/lib/data/mock/store");
+      const rows = store().continuityBriefs;
+      const index = rows.findIndex(
+        (item) => item.posting_id === String(body.postingId),
+      );
+      const dropped = index >= 0 ? rows.splice(index, 1)[0] : null;
+      return NextResponse.json({ dropped });
+    }
+
+    if (body.op === "mock:restore-brief") {
+      const { store } = await import("@/lib/data/mock/store");
+      const rows = store().continuityBriefs;
+      const index = rows.findIndex(
+        (item) => item.posting_id === String(body.postingId),
+      );
+      if (index >= 0) rows.splice(index, 1);
+      rows.push(body.brief);
+      return NextResponse.json({ ok: true });
+    }
+
     if (body.op === "mock:set-brief-review") {
       const brief = await repo().getBriefByPosting(String(body.postingId));
       // Reading it back is impossible once unreviewed, by design, so the store
@@ -119,6 +147,25 @@ export async function POST(request: Request) {
     const result = await setMatchStatusAction({}, form);
     if (result.error) return NextResponse.json(result, { status: 403 });
     return NextResponse.json({ ok: true });
+  }
+
+  if (body.op === "interview") {
+    form.set("posting_id", String(body.postingId));
+    for (const question of INTERVIEW_QUESTIONS) {
+      form.set(question.id, String(body.answers?.[question.id] ?? ""));
+    }
+    const result = await saveInterviewAction({}, form);
+    if (result.error) return NextResponse.json(result, { status: 403 });
+    if (result.gaps) return NextResponse.json(result, { status: 422 });
+    return NextResponse.json(result);
+  }
+
+  if (body.op === "approve") {
+    form.set("posting_id", String(body.postingId));
+    form.set("generated_brief", String(body.generatedBrief ?? ""));
+    const result = await approveBriefAction({}, form);
+    if (result.error) return NextResponse.json(result, { status: 403 });
+    return NextResponse.json(result);
   }
 
   if (body.op === "handover") {

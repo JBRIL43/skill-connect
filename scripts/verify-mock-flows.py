@@ -32,6 +32,29 @@ POST_INVENTORY = "post-inventory"
 POST_DISPATCH = "post-dispatch"
 TRANSITION_NODE = f"transition-{POST_DISPATCH}"
 
+# The first prompt in lib/handover/interview.ts, used as a marker for "this
+# person is looking at the interview screen".
+FIRST_QUESTION = "What would you call this job?"
+
+# A plausible handover, typed the way the outgoing employee would type it.
+# The wholesaler is the client name that has to survive into the draft and then
+# be cut at the redaction step -- that round trip is the point of the gate.
+ANSWERS = {
+    "role_title": "Dispatch Coordinator",
+    "recurring_tasks": "\n".join([
+        "Reconcile the farm delivery against yesterday orders before 5:30am",
+        "Allocate two vans across ten customers before the 6am loading",
+        "Chase the late farm delivery when the truck misses its slot",
+    ]),
+    "tools": "WhatsApp\nA shared order spreadsheet",
+    "shortcuts": "\n".join([
+        "The Bole Rd wholesaler always short-ships onions, so count them twice",
+        "Load the furthest hotel last or it arrives warm",
+    ]),
+    "coordinates_with": "Two drivers\nThe cooperative farm liaison",
+    "notes": "The morning cycle is the whole job. Everything else can wait.",
+}
+
 passes = 0
 failures: list[str] = []
 
@@ -155,8 +178,11 @@ def main() -> int:
         check("the brief card disappears once unreviewed",
               status == 200 and "Score candidates on this actual job" not in html,
               f"status {status}")
-        check("no awaiting-approval state is rendered for a state that cannot exist",
-              "Awaiting approval" not in html)
+        # Until Phase 6 this state was unreachable and nothing rendered for it.
+        # Now that an interview can be recorded and left unapproved, the page
+        # says so — but must name the state without quoting the brief.
+        check("the posting reports that a brief is waiting on the employee",
+              "Awaiting approval" in html)
         check("the brief's interview text does not leak into the page",
               "Confirm farm arrival quantities" not in html)
 
@@ -201,6 +227,114 @@ def main() -> int:
           "the brief itself was rendered, not the challenge derived from it")
     check("the internal review note stays out of it",
           "specific client contact names were removed" not in html)
+
+    # ------------------------------------------- Pillar 3b, the interview
+    # Everything above starts from the seeded brief. This starts from nothing,
+    # which is what an SME with a departing employee actually has.
+    print("\nPhase 6 — the handover interview, from no brief at all")
+    _, dropped = op(SME_KALITI, op="mock:drop-brief", postingId=POST_DISPATCH)
+    seeded = dropped.get("dropped") if isinstance(dropped, dict) else None
+    check("the seeded brief can be cleared to reach the never-interviewed state",
+          bool(seeded), str(dropped)[:200])
+
+    try:
+        status, html = app("GET", f"/matcher/postings/{POST_DISPATCH}",
+                           profile=SME_KALITI)
+        check("a transition posting with no brief offers the interview",
+              status == 200 and "Start the handover interview" in html,
+              f"status {status}")
+
+        status, html = app("GET", f"/matcher/postings/{POST_INVENTORY}",
+                           profile=SME_BOLE)
+        check("a normal posting does not offer one",
+              status == 200 and "Start the handover interview" not in html,
+              f"status {status}")
+
+        # urllib follows the redirect, so a refusal shows up as landing
+        # somewhere without the interview on it rather than as a 3xx.
+        status, other = app("GET", f"/handover/{POST_DISPATCH}", profile=SME_BOLE)
+        check("another SME cannot open the interview screen",
+              FIRST_QUESTION not in other, f"status {status}")
+
+        status, res = op(SME_BOLE, op="interview", postingId=POST_DISPATCH,
+                         answers={"role_title": "Dispatch",
+                                  "recurring_tasks": "a\nb"})
+        check("another SME cannot record one either", status >= 400,
+              f"status {status}: {str(res)[:200]}")
+
+        # Too thin to build a challenge from: a title and nothing else.
+        status, res = op(SME_KALITI, op="interview", postingId=POST_DISPATCH,
+                         answers={"role_title": "Dispatch Coordinator"})
+        check("an interview with nothing in it is refused, with a reason",
+              status == 422 and isinstance(res, dict) and res.get("gaps"),
+              f"status {status}: {str(res)[:200]}")
+
+        status, res = op(SME_KALITI, op="interview", postingId=POST_DISPATCH,
+                         answers=ANSWERS)
+        check("a real interview saves", status == 200,
+              f"status {status}: {str(res)[:200]}")
+
+        status, html = app("GET", f"/matcher/postings/{POST_DISPATCH}",
+                           profile=SME_KALITI)
+        check("saving does not approve: the posting shows it awaiting the employee",
+              status == 200 and "Awaiting approval" in html, f"status {status}")
+        check("and the employer cannot read it yet",
+              "Score candidates on this actual job" not in html)
+        check("nor can the unapproved prose reach the employer's page",
+              "reconcile the farm delivery" not in html.lower())
+
+        status, res = op(SME_KALITI, op="handover", postingId=POST_DISPATCH)
+        check("a challenge cannot be built from it before approval", status >= 400,
+              f"status {status}: {str(res)[:200]}")
+
+        status, html = app("GET", f"/handover/{POST_DISPATCH}", profile=SME_KALITI)
+        check("the employee's own screen does show it, to be redacted",
+              status == 200 and "reconcile the farm delivery" in html.lower(),
+              f"status {status}")
+        check("the answers reload into the interview for editing",
+              "Bole Rd wholesaler" in html)
+
+        # What the employee actually does at the gate: cut the client name.
+        redacted = ("The dispatch coordinator role reconciles the farm delivery "
+                    "against the previous day orders before 5:30am and "
+                    "allocates two vans across ten customers.")
+        status, res = op(SME_KALITI, op="approve", postingId=POST_DISPATCH,
+                         generatedBrief=redacted)
+        check("approving works", status == 200, f"status {status}: {str(res)[:200]}")
+
+        status, html = app("GET", f"/matcher/postings/{POST_DISPATCH}",
+                           profile=SME_KALITI)
+        check("the employer can now read the brief",
+              status == 200 and "Score candidates on this actual job" in html,
+              f"status {status}")
+        check("and reads the redacted text, not the draft",
+              redacted[:60] in html and "Bole Rd wholesaler" not in html,
+              "the pre-redaction draft was served instead of the approved text")
+
+        status, res = op(SME_KALITI, op="handover", postingId=POST_DISPATCH)
+        check("the approved brief generates a challenge", status == 200,
+              f"status {status}: {str(res)[:200]}")
+
+        status, html = app("GET", f"/sandbox/{TRANSITION_NODE}", profile=JS_DAWIT)
+        check("and a candidate is scored on the job that was described",
+              status == 200 and "Chase the late farm delivery" in html,
+              f"status {status}; the interview's tasks did not reach the challenge")
+
+        # Editing after approval is the one way unreviewed text could ship under
+        # an approved flag, so saving has to revoke approval.
+        status, res = op(SME_KALITI, op="interview", postingId=POST_DISPATCH,
+                         answers={**ANSWERS, "notes": "Added after approval."})
+        check("re-running the interview on an approved brief saves", status == 200,
+              f"status {status}: {str(res)[:200]}")
+        status, html = app("GET", f"/matcher/postings/{POST_DISPATCH}",
+                           profile=SME_KALITI)
+        check("editing an approved brief sends it back behind the gate",
+              status == 200 and "Awaiting approval" in html,
+              "the edit kept the approved flag, so unreviewed text is now shared")
+    finally:
+        if seeded:
+            op(SME_KALITI, op="mock:restore-brief", postingId=POST_DISPATCH,
+               brief=seeded)
 
     # ------------------------------------------------------------- ownership
     print("\nOwnership holds without a database to enforce it")

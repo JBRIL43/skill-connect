@@ -1,6 +1,7 @@
 import { store } from "@/lib/data/mock/store";
 import type {
   BadgeInput,
+  CandidateLabel,
   CompanyProfilePatch,
   DataRepository,
   MatchInput,
@@ -147,6 +148,29 @@ export const mockRepository: DataRepository = {
     return store()
       .matches.filter((row) => row.posting_id === postingId)
       .sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0));
+  },
+
+  // Mirrors the supabase adapter's gate so mock mode cannot show a label the
+  // live path would withhold.
+  async listCandidateLabelsForPosting(postingId, smeId) {
+    const state = store();
+
+    const posting = state.postings.find((row) => row.id === postingId);
+    if (!posting || posting.sme_id !== smeId) return [];
+
+    const candidateIds = new Set(
+      state.matches
+        .filter((row) => row.posting_id === postingId)
+        .map((row) => row.candidate_id),
+    );
+
+    return state.profiles
+      .filter((row) => candidateIds.has(row.id) && row.opt_in_discoverable)
+      .map<CandidateLabel>((row) => ({
+        id: row.id,
+        full_name: row.full_name,
+        region: row.region,
+      }));
   },
 
   async upsertMatch(input: MatchInput) {

@@ -51,6 +51,17 @@ export type CompanyProfilePatch = Partial<
 >;
 
 /**
+ * The only identifying fields an SME ever sees about a candidate, and only for
+ * candidates they already have a match with who opted in — the same condition
+ * Dev 1's sme_has_match_with() uses to release badges.
+ */
+export type CandidateLabel = {
+  id: string;
+  full_name: string | null;
+  region: string | null;
+};
+
+/**
  * The only surface Dev 3's routes and components are allowed to talk to.
  * Two implementations: `mock` (in-memory fixtures) and `supabase` (Dev 1's
  * live schema). Chosen by NEXT_PUBLIC_DATA_SOURCE.
@@ -91,6 +102,11 @@ export interface DataRepository {
   getPostingByTemplate(templateId: string): Promise<SmePosting | null>;
 
   listMatchesForPosting(postingId: string): Promise<Match[]>;
+  /** Gated on the SME owning the posting and the candidate still opting in. */
+  listCandidateLabelsForPosting(
+    postingId: string,
+    smeId: string,
+  ): Promise<CandidateLabel[]>;
   upsertMatch(input: MatchInput): Promise<Match>;
   setMatchStatus(id: string, status: MatchStatus): Promise<Match | null>;
   countHiredBySme(smeId: string): Promise<number>;

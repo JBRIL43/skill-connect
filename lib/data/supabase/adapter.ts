@@ -1,5 +1,6 @@
 import type {
   BadgeInput,
+  CandidateLabel,
   CompanyProfilePatch,
   DataRepository,
   MatchInput,
@@ -297,6 +298,42 @@ export const supabaseRepository: DataRepository = {
         )
         .eq("posting_id", postingId)
         .order("match_score", { ascending: false }),
+    );
+  },
+
+  /**
+   * Cross-user, and the one place an SME learns who a candidate is. profiles has
+   * no SME select policy yet, so this enforces in code exactly what
+   * sme_has_match_with() enforces in SQL for badges: the SME must own the
+   * posting, a match must already exist, and the candidate must still be opted
+   * in. Replace this with a profiles policy when Dev 1 adds one.
+   */
+  async listCandidateLabelsForPosting(postingId, smeId) {
+    const client = elevated();
+
+    const posting = unwrap<{ sme_id: string }>(
+      await client
+        .from("sme_postings")
+        .select("sme_id")
+        .eq("id", postingId)
+        .maybeSingle(),
+    );
+    if (!posting || posting.sme_id !== smeId) return [];
+
+    const matches = unwrapList<{ candidate_id: string }>(
+      await client.from("matches").select("candidate_id").eq("posting_id", postingId),
+    );
+    if (matches.length === 0) return [];
+
+    return unwrapList<CandidateLabel>(
+      await client
+        .from("profiles")
+        .select("id, full_name, region")
+        .in(
+          "id",
+          matches.map((row) => row.candidate_id),
+        )
+        .eq("opt_in_discoverable", true),
     );
   },
 

@@ -123,14 +123,64 @@ go through `lib/data` and `lib/ai` so both switches keep working.
 
 ---
 
-## 6. Temporary files Dev 1 will replace
+## 6. Which Supabase client each operation uses
 
-Dev 3 scaffolded the app because Dev 1's foundation did not exist yet. These are
-placeholders, not territory:
+`0002_rls_policies.sql` denies rather than errors, so the wrong client returns an
+empty array that reads exactly like a scoring bug. The split in
+`lib/data/supabase/adapter.ts`:
 
-- `app/layout.tsx`, `app/page.tsx`, `components/app-nav.tsx` — replace with the
-  real shell and dashboard routing.
-- `lib/session.ts` — cookie-based demo identity switcher standing in for Supabase
-  Auth. Replace `getCurrentUser()` with the real session lookup and every Dev 3
-  surface keeps working.
-- No file under `supabase/` was created. That boundary was not crossed.
+| Operation | Client | Why |
+| --- | --- | --- |
+| own scores, badges, templates, postings, matches, notifications, briefs | session | the caller owns the rows |
+| `profiles.opt_in_discoverable` update | session | the candidate's own decision |
+| notification check | service role | reads every SME's `role_skill_templates` |
+| match run's score and opt-in reads | service role | an SME has no policy on `sandbox_scores` |
+| `continuity_briefs.custom_node_id` write | service role | the table has no write policy at all |
+| `matches` insert and update | session | `owns_posting()` is tighter than the service role |
+
+The service role bypasses RLS entirely, so it stays in route handlers and server
+actions and is never imported into a client component.
+
+---
+
+## 7. Open items for Dev 1
+
+**1. An SME has no way to see who a candidate is.** `profiles` is own-row only,
+and `matches` carries just `match_score`, `gap_analysis`, and `status`. So the
+ranked results list has no name, no region, nothing to label a row with. Three
+ways out, and the choice is Dev 1's because two are migrations:
+
+- a display-name column on `matches`, written by the service role during the run;
+- a `profiles` select policy gated on `sme_has_match_with(id)`;
+- or keep candidates deliberately anonymous until hire, and I label rows
+  "Candidate A/B/C".
+
+Dev 3 builds against the third option for now, since it needs no schema change
+and is defensible on privacy grounds. Say the word and it becomes either of the
+others in minutes.
+
+**2. Please confirm the service role is the intended path** for the three
+operations in the table above. `lib/supabase/admin.ts` already names "the
+notification check", so this is likely just a yes.
+
+**3. Two shared files were touched, both narrowly.** Flagging rather than
+assuming:
+
+- `app/layout.tsx` — `<html className="dark">`. The dark palette is the sandbox's
+  design language and Dev 1's `.dark` tokens already exist, but the admin tables
+  and skill radar were built light.
+- `middleware.ts` — a no-op when `NEXT_PUBLIC_DATA_SOURCE !== "supabase"`.
+  Without it `updateSession` throws on the missing keys and mock mode cannot
+  render a page, which costs us the offline demo fallback. Auth is untouched in
+  supabase mode.
+
+**4. A latent font bug, not fixed properly.** `@theme inline` defines
+`--font-sans: var(--font-sans)`, which is self-referential, so `font-sans` emits
+nothing and `Noto_Sans_Ethiopic` never applies — meaning tofu boxes for Amharic,
+the exact risk the comment in `app/layout.tsx` calls out. `app/globals.css` now
+names the loader variables on `body` as a stopgap. The real fix is Dev 1's.
+
+**5. Please don't force-push `d1/foundation`.** Dev 3's branch is based on it
+directly because it is not yet merged to `main`. Merging it to `main` is welcome.
+
+No file under `supabase/` was created or edited. That boundary was not crossed.

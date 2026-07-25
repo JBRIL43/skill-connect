@@ -10,7 +10,9 @@ import { resolveNode } from "@/lib/sandbox/resolve";
 
 const bodySchema = z.object({
   nodeId: z.string().min(1),
-  mode: z.enum(["standard", "pressure_simulation"]),
+  // A candidate who never opens the assistant panel still submits, so mode and
+  // transcript carry defaults rather than making the caller send empties.
+  mode: z.enum(["standard", "pressure_simulation"]).default("standard"),
   submission: z.string().min(MIN_SUBMISSION_CHARS).max(8000),
   transcript: z
     .array(
@@ -19,15 +21,21 @@ const bodySchema = z.object({
         content: z.string().min(1).max(4000),
       }),
     )
-    .max(40),
+    .max(40)
+    .default([]),
 });
 
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json());
   if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const field = issue?.path.join(".") || "body";
     return NextResponse.json(
       {
-        error: `Submission must be at least ${MIN_SUBMISSION_CHARS} characters and reference the brief.`,
+        error:
+          field === "submission"
+            ? `Your answer must be at least ${MIN_SUBMISSION_CHARS} characters and address the brief.`
+            : `Invalid ${field}: ${issue?.message ?? "unexpected value"}`,
       },
       { status: 400 },
     );

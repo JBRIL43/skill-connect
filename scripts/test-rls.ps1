@@ -99,9 +99,13 @@ Invoke-RestMethod -Method Post -Uri "$url/rest/v1/skill_matrices" `
   -Headers $mergeHeaders -ContentType "application/json" `
   -Body (@{ user_id = $seekerId; skills_json = @{ technical = @{ excel_basics = 72 } }; readiness_score = 68 } | ConvertTo-Json -Depth 5) | Out-Null
 
+# The key has to come from the frozen vocabulary in lib/sandbox/competencies.ts.
+# normalizeScores() drops anything else, and a dropped score is not an error --
+# it is just a competency the candidate does not have, so a stale key here would
+# quietly reintroduce the "every template matches nobody" bug.
 Invoke-RestMethod -Method Post -Uri "$url/rest/v1/sandbox_scores" `
   -Headers $mergeHeaders -ContentType "application/json" `
-  -Body (@{ user_id = $seekerId; node_id = "merkato-whatsapp-catalog"; scores_json = @{ prompt_engineering = 82 } } | ConvertTo-Json -Depth 5) | Out-Null
+  -Body (@{ user_id = $seekerId; node_id = "merkato-whatsapp-catalog"; scores_json = @{ ai_prompt_literacy = 82 } } | ConvertTo-Json -Depth 5) | Out-Null
 
 Write-Host "`nA candidate can see their own data" -ForegroundColor Cyan
 Assert-Count "job seeker reads own skill_matrices" (Read-Table $seeker "skill_matrices?select=id") "ge" 1
@@ -118,6 +122,15 @@ Assert-NoData "anonymous reads sandbox_scores" (Read-Table $null "sandbox_scores
 
 Write-Host "`nPublic surfaces still work" -ForegroundColor Cyan
 Assert-Count "SME reads company_profiles" (Read-Table $sme "company_profiles?select=id") "ge" 1
+
+# The deny checks above cannot distinguish "policy works" from "policy missing
+# and the table is empty". Asserting that an admin DOES read across users proves
+# the rows exist and are reachable, so a zero above means RLS filtered them.
+Write-Host "`nAn admin can read across users, which is what the console needs" -ForegroundColor Cyan
+$admin = $adminAuth.Token
+Assert-Count "admin reads every skill_matrices row" (Read-Table $admin "skill_matrices?select=id") "ge" 2
+Assert-Count "admin reads every sandbox_scores row" (Read-Table $admin "sandbox_scores?select=id") "ge" 2
+Assert-Count "admin reads more than their own profile" (Read-Table $admin "profiles?select=id") "ge" 2
 
 # ---------------------------------------------------------------------------
 # Fixtures for the three boundaries the checks above cannot reach: a handover
@@ -148,7 +161,7 @@ $theirNotification = New-Row "notifications" @{
   template_id  = (New-Row "role_skill_templates" @{
     sme_id          = $otherPartyId
     role_name       = "RLS fixture - other company template"
-    thresholds_json = @{ excel_basics = 70 }
+    thresholds_json = @{ data_tools = 70 }
   }).id
   candidate_id = $seekerId
 }

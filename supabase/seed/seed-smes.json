@@ -1,5 +1,6 @@
 {
-  "version": 1,
+  "version": 2,
+  "_vocabulary": "Every key under templates[].thresholds MUST be one of the six in lib/sandbox/competencies.ts: ai_prompt_literacy, task_accuracy, customer_comms, data_tools, process_thinking, adaptability. A threshold on any other key can never be met, so the template matches nobody and the SME sees an empty list with nothing logged.",
   "smes": [
     {
       "key": "abeba-retail",
@@ -18,8 +19,8 @@
           "role_name": "Retail Inventory Assistant",
           "notify_on_match": true,
           "thresholds": {
-            "excel_basics": 70,
-            "prompt_engineering": 75,
+            "data_tools": 70,
+            "ai_prompt_literacy": 75,
             "customer_comms": 65
           }
         }
@@ -52,7 +53,7 @@
           "notify_on_match": true,
           "thresholds": {
             "task_accuracy": 80,
-            "communication": 70
+            "customer_comms": 70
           }
         }
       ],

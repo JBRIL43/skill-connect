@@ -127,13 +127,37 @@ Any FAIL in either suite is a P0 and stops the build.
 ## Demo seed data
 
 `supabase/seed/seed-job-seekers.json` and `seed-smes.json` hold the personas the
-demo runs on. The admin console has a **Seed demo data** button that loads them;
-it is the fallback if a live signup or a grading call fails on stage, so it is
-safe to press repeatedly — every row is keyed off the persona's `key`, and a
-second press updates the same rows instead of creating duplicates.
+demo runs on. Two ways to load them:
+
+```powershell
+npm run seed        # from a terminal
+```
+
+or the **Seed demo data** button in the admin console, which is the fallback if a
+live signup or a grading call fails on stage. Both run the same code and both are
+safe to repeat — every row is keyed off the persona's `key`, and a second run
+updates the same rows instead of creating duplicates.
 
 The sample committed here is synthetic. Replacing it with real personas means
 editing the JSON only — no code changes, and no need to understand the schema.
+
+### Score keys are a fixed list
+
+Every key under a candidate's `scores` and a template's `thresholds` must be one
+of the six in `lib/sandbox/competencies.ts`:
+
+`ai_prompt_literacy` · `task_accuracy` · `customer_comms` · `data_tools` ·
+`process_thinking` · `adaptability`
+
+This matters more than it looks. Matching compares the two blobs key by key, and
+an unrecognised key is not an error — it is silently dropped, so the candidate
+simply has no score for it. Invent a key and the template it belongs to will
+match nobody, with an empty screen and nothing in the logs to explain why. The
+spec's own two examples disagree on these names; that file is the reconciliation,
+and it is the only place the list may change.
+
+`skills` is a different thing — it is Dev 2's intake matrix, nothing in matching
+reads it, and it is free-form.
 
 A job seeker looks like this. `key` is a permanent nickname for the persona:
 change any other field freely, but changing `key` creates a second person.
@@ -153,7 +177,7 @@ change any other field freely, but changing `key` creates a second person.
     {
       "node_id": "merkato-whatsapp-catalog",
       "mode": "standard",
-      "scores": { "prompt_engineering": 82, "task_accuracy": 74, "communication": 88 }
+      "scores": { "ai_prompt_literacy": 82, "task_accuracy": 74, "customer_comms": 88 }
     }
   ],
   "badges": [{ "node_id": "merkato-whatsapp-catalog", "badge_name": "Catalog Builder" }]
@@ -177,7 +201,7 @@ A company looks like this:
       "key": "inventory-assistant",
       "role_name": "Retail Inventory Assistant",
       "notify_on_match": true,
-      "thresholds": { "excel_basics": 70, "prompt_engineering": 75 }
+      "thresholds": { "data_tools": 70, "ai_prompt_literacy": 75 }
     }
   ],
   "postings": [
@@ -193,9 +217,9 @@ A company looks like this:
 
 Three rules make the demo tell a story rather than show noise:
 
-1. **Every score is 0-100.** A competency name is a lowercase slug like
-   `excel_basics`, and the *same slug* must appear in a candidate's `scores` and
-   in a company's `thresholds`, or the two never meet.
+1. **Every score is 0-100,** and every competency name comes from the fixed list
+   above. The *same* key must appear in a candidate's `scores` and in a company's
+   `thresholds`, or the two never meet.
 2. **At least one candidate should clear a template and one should miss it.**
    The notification demo needs both, and a near miss is the more interesting
    story on stage.

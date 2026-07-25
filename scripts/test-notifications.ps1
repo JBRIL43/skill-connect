@@ -67,7 +67,11 @@ $smeAuth = Get-AccessToken "abeba.sme@example.com" $Password
 $seekerId = $seeker.UserId
 $smeId = $smeAuth.UserId
 
-# A competency name nothing else uses, so a real score cannot make this pass.
+# Deliberately outside the frozen vocabulary in lib/sandbox/competencies.ts, and
+# deliberately used on both the score and the threshold side so the two still
+# meet. A real key such as adaptability would let seeded candidates clear these
+# fixtures and report a pass the mechanism did not earn. Do not "correct" this to
+# a frozen key -- the isolation is the point.
 $competency = "notif_test_competency"
 
 Invoke-Rest Post "sandbox_scores" @{

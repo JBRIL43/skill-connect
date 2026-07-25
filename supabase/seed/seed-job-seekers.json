@@ -1,5 +1,6 @@
 {
-  "version": 1,
+  "version": 2,
+  "_vocabulary": "Every key under sandbox_scores[].scores MUST be one of the six in lib/sandbox/competencies.ts: ai_prompt_literacy, task_accuracy, customer_comms, data_tools, process_thinking, adaptability. Anything else is silently dropped by normalizeScores(), and a dropped score is not an error - it just means no template can ever match this candidate.",
   "job_seekers": [
     {
       "key": "meron-tadesse",
@@ -19,11 +20,12 @@
           "node_id": "merkato-whatsapp-catalog",
           "mode": "standard",
           "scores": {
-            "prompt_engineering": 82,
+            "ai_prompt_literacy": 82,
             "task_accuracy": 74,
-            "communication": 88,
-            "excel_basics": 71,
-            "customer_comms": 84
+            "customer_comms": 88,
+            "data_tools": 71,
+            "process_thinking": 69,
+            "adaptability": 77
           }
         }
       ],
@@ -49,11 +51,12 @@
           "node_id": "inventory-reconciliation",
           "mode": "standard",
           "scores": {
-            "prompt_engineering": 64,
+            "ai_prompt_literacy": 64,
             "task_accuracy": 90,
-            "communication": 57,
-            "excel_basics": 88,
-            "customer_comms": 55
+            "customer_comms": 57,
+            "data_tools": 88,
+            "process_thinking": 81,
+            "adaptability": 60
           }
         }
       ],
@@ -79,11 +82,12 @@
           "node_id": "customer-complaint-triage",
           "mode": "pressure_simulation",
           "scores": {
-            "prompt_engineering": 61,
+            "ai_prompt_literacy": 61,
             "task_accuracy": 68,
-            "communication": 93,
-            "excel_basics": 44,
-            "customer_comms": 91
+            "customer_comms": 93,
+            "data_tools": 44,
+            "process_thinking": 58,
+            "adaptability": 86
           }
         }
       ],

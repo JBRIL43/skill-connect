@@ -119,6 +119,15 @@ export type Match = {
   match_score: number | null;
   gap_analysis: string | null;
   status: MatchStatus;
+  /**
+   * How the ranked-results screen labels this row. The candidate's real name
+   * while they are discoverable, otherwise their anonymous_label. Assigned by a
+   * trigger (migration 0006) because an SME cannot read a candidate's profile --
+   * render it as-is rather than joining to profiles, which will return nothing.
+   */
+  candidate_label: string | null;
+  /** "Candidate A" style fallback, stable per posting even across an opt-out. */
+  anonymous_label: string | null;
   created_at: string;
 };
 

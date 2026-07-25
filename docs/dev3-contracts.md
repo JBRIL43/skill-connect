@@ -111,7 +111,9 @@ demonstrable rather than just claimed.
 Both switches live in `.env.local` (see [.env.example](../.env.example)):
 
 - `NEXT_PUBLIC_DATA_SOURCE=mock` — in-memory fixtures, no Supabase needed.
-  Switch to `supabase` when Dev 1's schema is live; only the adapter changes.
+  Anything else, unset included, is the live schema; only the adapter changes.
+  The default is deliberately the real one, so that forgetting the variable on a
+  deployment cannot quietly serve fixtures that throw every write away.
 - `AI_MODE=stub` — deterministic local grading and generation, no API key needed.
   Switch to `live` for the Vercel AI SDK path once `OPENAI_API_KEY` is set.
 
@@ -167,10 +169,13 @@ assuming:
 - `app/layout.tsx` — `<html className="dark">`. The dark palette is the sandbox's
   design language and Dev 1's `.dark` tokens already exist, but the admin tables
   and skill radar were built light.
-- `middleware.ts` — a no-op when `NEXT_PUBLIC_DATA_SOURCE !== "supabase"`.
+- `middleware.ts` — a no-op when `NEXT_PUBLIC_DATA_SOURCE` is exactly `mock`.
   Without it `updateSession` throws on the missing keys and mock mode cannot
   render a page, which costs us the offline demo fallback. Auth is untouched in
-  supabase mode.
+  every other case, including when the variable is unset. It originally skipped
+  on anything that was not `supabase`, which meant the Vercel deployment — where
+  the variable was never set — refreshed nobody's session and logged users out
+  once their access token expired.
 
 **4. ~~A latent font bug~~ — fixed by Dev 1 in `177e01a`.** `--font-sans` was
 self-referential, so `font-sans` emitted nothing and Amharic fell back to tofu

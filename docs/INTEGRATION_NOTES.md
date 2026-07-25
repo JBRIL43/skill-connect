@@ -195,17 +195,57 @@ gets a stub path chosen by the same predicate, so a missing key degrades to cann
 output instead of an exception. The second is what actually makes the run safe,
 and it is worth the hour.
 
-## Dev 2: your branch predates the schema you will demo on
+## Dev 2: the schema gap closed while this was being written
 
-`d2/ai-coach` branches from `df14fc1`, five commits behind `d1/foundation`. It has
-never seen `0005_column_grants.sql`, `0006_match_candidate_label.sql`, the
-frozen-vocabulary seed fix, or `scripts/seed.ts`. Nothing in the merge broke
-because of it, so this is not urgent -- but it does mean the Pillar 1 screens have
-only ever run against a schema that no longer exists. Better to pull Dev 1's tip
-and re-check before the real merge than to discover it during one.
+> Resolved by Dev 2 in `a968b72`, minutes after the section below was drafted.
+> Left in place because it records what to check, not because anything is
+> outstanding.
 
-One thing is already right, and worth recording so nobody redoes it:
+`d2/ai-coach` used to branch from `df14fc1`, five commits behind
+`d1/foundation`, so it had never seen `0005_column_grants.sql`,
+`0006_match_candidate_label.sql`, the frozen-vocabulary seed fix, or
+`scripts/seed.ts`. That merge has now happened, so Pillar 1 is building against
+the current schema. The trial merge measured above predates it and should be
+re-run against `5ffea41` before the real one.
+
+One thing was already right, and is worth recording so nobody redoes it:
 `lib/ai/sandbox-catalog.ts` mirrors Dev 3's registry exactly -- the same three
 node ids, the same sectors, the same competency sets, on the frozen six keys. The
 deep links in the career recommendations resolve to challenges that exist. That
 was the Hour 14 handoff, and it landed.
+
+## Dev 1: the deployment was serving Pillars 2 and 3 from fixtures
+
+> Fixed on `dev3/pillar3-matcher`. The two defaults below are inverted, so this
+> is already safe without anyone touching Vercel. The env var is still worth
+> setting; it is now belt-and-braces rather than the only thing holding it up.
+
+`README.md` lists four variables set on Production. `NEXT_PUBLIC_DATA_SOURCE` is
+not one of them, and Dev 3's data seam read it as *"anything that is not
+`supabase` means mock"*. So on `skill-connect-orcin.vercel.app`, every Sandbox
+grade, match run and shortlist was hitting in-memory fixtures rather than the
+seeded database -- and because that store is per-instance memory on a serverless
+host, it was not even consistent between two requests. It looked healthy the
+whole time, which is what made it worth catching before the demo and not during.
+
+The same variable gated `middleware.ts`, which is the more serious half.
+`updateSession` never ran in production, so an expired access token was never
+refreshed and signed-in users were dropped roughly an hour in.
+
+Neither suite caught it, and it is worth understanding why rather than adding
+more checks blindly: `verify-routing.ps1` and `test-notifications.ps1` both reach
+Supabase directly, server-side, so they pass identically whether or not anything
+above the data seam is real. A green suite against production said nothing about
+the seam, because the seam is not on their path.
+
+Both defaults now require the literal string `mock` to opt out of the real
+stack, so an unset variable fails loudly on missing Supabase keys instead of
+quietly serving fiction. Setting it explicitly is still the right move:
+
+```powershell
+npx vercel env add NEXT_PUBLIC_DATA_SOURCE production   # value: supabase
+npx vercel --prod
+```
+
+The redeploy is not optional. `NEXT_PUBLIC_*` variables are inlined at build
+time, so adding one without rebuilding changes nothing.

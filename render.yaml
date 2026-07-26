@@ -1,0 +1,69 @@
+# Render blueprint for the Next.js app. Optional -- Render only reads this if you
+# point a Blueprint at the repo, so it changes nothing about the Vercel deploy in
+# README.md, which stays the team's primary URL.
+#
+# There is one service. The "backend" is this same app: route handlers under
+# app/api/** plus the server actions, with Supabase as the hosted database. There
+# is nothing else to stand up.
+#
+# Secrets are marked `sync: false`, which tells Render to ask for the value in the
+# dashboard rather than read it from this file. Nothing secret belongs in git.
+
+services:
+  - type: web
+    name: skill-connect
+    runtime: node
+
+    # Frankfurt puts the app in the same region as the Supabase project
+    # (eu-central-1), so every query stays intra-region instead of crossing the
+    # Atlantic twice per request.
+    region: frankfurt
+
+    # Deliberately not `free`. A free instance sleeps after inactivity and takes
+    # roughly a minute to wake, which is a minute of blank screen if the demo
+    # happens to be the first request in a while.
+    plan: starter
+
+    # main has no application code on it yet. Track the branch that does.
+    branch: dev3/pillar3-matcher
+
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+
+    # `/` redirects by role, so it is a poor health signal. /login renders for a
+    # signed-out visitor and is the honest "the app is up" check.
+    healthCheckPath: /login
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+
+      # Read by lib/data/index.ts and middleware.ts. Both now default to the real
+      # stack when this is unset, so setting it here is belt-and-braces rather
+      # than load-bearing. Note it is inlined at build time, not read at runtime:
+      # changing it requires a rebuild, not just a restart.
+      - key: NEXT_PUBLIC_DATA_SOURCE
+        value: supabase
+
+      # Pillars 2 and 3 grade deterministically under `stub` and need no key or
+      # network. Switch to `live` only once OPENAI_API_KEY is set -- lib/ai/provider.ts
+      # ignores `live` without a key and stays on the stub rather than throwing.
+      - key: AI_MODE
+        value: stub
+
+      # Set these in the Render dashboard. The two NEXT_PUBLIC_ ones are needed at
+      # build time, so add them before the first deploy or the build bakes in
+      # undefined and every Supabase call fails at runtime.
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ADMIN_INVITE_CODE
+        sync: false
+
+      # Only needed if AI_MODE is flipped to live, and only by Dev 2's pillar,
+      # which throws without it.
+      - key: OPENAI_API_KEY
+        sync: false

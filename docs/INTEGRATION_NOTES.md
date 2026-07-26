@@ -20,9 +20,16 @@ shared config file:
 "typecheck": "tsc --noEmit",
 "seed": "tsx --env-file=.env.local scripts/seed.ts",
 "check:contracts": "python3 scripts/check-contracts.py",
+"verify:mock": "python3 scripts/verify-mock-flows.py",
 "verify:live": "python3 scripts/verify-live.py",
 "verify:flows": "python3 scripts/verify-app-flows.py"
 ```
+
+One caveat on `.env.example`, where "keep every line from both sides" is not
+quite enough: the `d1/foundation` rewrite drops `NEXT_PUBLIC_DATA_SOURCE` and
+`AI_MODE`, and unset counts as mock. A teammate following "copy this file and you
+are set" therefore gets an app that looks live, is fully seeded, and is serving
+in-memory fixtures. Both are restored on `dev3/pillar3-matcher`.
 
 `package-lock.json` is not worth resolving by hand. Take either side, then run
 `npm install` and commit the regenerated file.
@@ -31,6 +38,11 @@ shared config file:
 sides. Nobody's entries contradict anybody else's.
 
 ## Dev 3: `check-contracts.py` needs to read every migration
+
+> **Done** in `dev3/pillar3-matcher`. `parse_sql_tables()` now folds
+> `alter table ... add column` from every migration into the schema it compares
+> against, and drops what a later migration drops, per the suggestion below. The
+> checker reports 77 columns and passes.
 
 `npm run check:contracts` goes red on the merge, and not because of anything in
 your code. It reads the schema from `0001_initial_schema.sql` alone, so any
@@ -87,6 +99,13 @@ With both applied the checker reports 77 columns and passes. Verified on a
 scratch merge of the two branches.
 
 ## Dev 3: the ranked-results screen can show real names
+
+> **Done** in `dev3/pillar3-matcher`. The ranked list renders
+> `match.candidate_label` directly, and the temporary
+> `listCandidateLabelsForPosting` service-role read of `profiles` is deleted.
+> Region went with it, since match results are Match Score and Gap Analysis only.
+> The mock adapter mirrors both of `0006`'s triggers, including taking the name
+> back on opt-out, so the offline fallback behaves the same.
 
 `matches.candidate_label` now exists, so the anonymous `Candidate A / B / C`
 labels no longer have to be the whole story. Render the column as-is:
@@ -149,3 +168,166 @@ Source of truth: `lib/ai/handover.ts` (`rawInterviewJsonSchema`).
 
 Only consume rows where `reviewed_by_employee = true`. Never read unreviewed
 briefs, and never expose `raw_interview_json` to SME UI.
+## Everyone: the full three-way merge builds and passes
+
+> Added by Dev 3, from a throwaway branch that merged `d2/ai-coach` onto
+> `dev3/pillar3-matcher`, which already carries all seven commits of
+> `d1/foundation`. Nothing was pushed and the branch was deleted afterwards, so
+> the merge to `main` is still ours to do together.
+
+The trial merges above establish which files conflict. This is the other half of
+the question, and the one that decides whether `main` is demoable: does the
+merged tree actually run. It does.
+
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | clean |
+| `npm run lint` | clean |
+| `npm run check:contracts` | 11 tables, 77 columns, all contracts hold |
+| `npm run build` | 23 routes compile |
+| `npm run verify:mock` | 20 of 20 checks pass |
+
+Two files conflict, both config, none of it application code -- the folder
+ownership in `.cursor/rules/` did its job a second time. `package.json` is a
+single line, Dev 3's `@xyflow/react`, which `d2/ai-coach` has no reason to carry;
+keep it. Dev 2 independently picked the same versions Dev 3 did for `ai`,
+`@ai-sdk/openai` and `zod`, so there is no version skew to reconcile. The
+lockfile regenerates with `npm install`, as prescribed above.
+
+## Dev 2: the coach throws when no LLM key is set
+
+`lib/ai/engine.ts` refuses to start without a key:
+
+```ts
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error("OPENAI_API_KEY is not configured");
+}
+```
+
+Neither `OPENAI_API_KEY` nor `GEMINI_API_KEY` is set in `.env.local` today, so on
+the merged tree every Pillar 1 AI surface -- the chat, the skill matrix, the
+career recommendations -- fails at runtime while the rest of the app is healthy.
+This is not a merge problem; merging just puts it somewhere you can see it.
+
+The asymmetry is worth naming, because it explains why the failure is one-sided.
+Pillars 2 and 3 route model calls through `isLiveAI()` in `lib/ai/provider.ts`,
+where `AI_MODE=live` only counts when a key is actually present:
+
+```ts
+return process.env.AI_MODE === "live" && Boolean(process.env.OPENAI_API_KEY);
+```
+
+Today `.env.local` sets `AI_MODE=stub` outright, so Pillars 2 and 3 are on the
+deterministic path deliberately -- it needs no key and no network. The key check
+above is the second layer: flipping `AI_MODE` to `live` on a machine without a key
+still degrades to that same grader instead of breaking. Two independent reasons
+the Sandbox demo survives a dead venue wifi, which is exactly the property Pillar 1
+is missing.
+
+There are two ways out and they are not exclusive. Someone adds a real key, which
+works but leaves the demo dependent on the venue's network on the day. Or Pillar 1
+gets a stub path chosen by the same predicate, so a missing key degrades to canned
+output instead of an exception. The second is what actually makes the run safe,
+and it is worth the hour.
+
+## Dev 2: the schema gap closed while this was being written
+
+> Resolved by Dev 2 in `a968b72`, minutes after the section below was drafted.
+> Left in place because it records what to check, not because anything is
+> outstanding.
+
+`d2/ai-coach` used to branch from `df14fc1`, five commits behind
+`d1/foundation`, so it had never seen `0005_column_grants.sql`,
+`0006_match_candidate_label.sql`, the frozen-vocabulary seed fix, or
+`scripts/seed.ts`. That merge has now happened, so Pillar 1 is building against
+the current schema. The trial merge measured above predates it and should be
+re-run against `5ffea41` before the real one.
+
+One thing was already right, and is worth recording so nobody redoes it:
+`lib/ai/sandbox-catalog.ts` mirrors Dev 3's registry exactly -- the same three
+node ids, the same sectors, the same competency sets, on the frozen six keys. The
+deep links in the career recommendations resolve to challenges that exist. That
+was the Hour 14 handoff, and it landed.
+
+## Dev 1: the deployment was serving Pillars 2 and 3 from fixtures
+
+> Fixed on `dev3/pillar3-matcher`. The two defaults below are inverted, so this
+> is already safe without anyone touching Vercel. The env var is still worth
+> setting; it is now belt-and-braces rather than the only thing holding it up.
+
+`README.md` lists four variables set on Production. `NEXT_PUBLIC_DATA_SOURCE` is
+not one of them, and Dev 3's data seam read it as *"anything that is not
+`supabase` means mock"*. So on `skill-connect-orcin.vercel.app`, every Sandbox
+grade, match run and shortlist was hitting in-memory fixtures rather than the
+seeded database -- and because that store is per-instance memory on a serverless
+host, it was not even consistent between two requests. It looked healthy the
+whole time, which is what made it worth catching before the demo and not during.
+
+The same variable gated `middleware.ts`, which is the more serious half.
+`updateSession` never ran in production, so an expired access token was never
+refreshed and signed-in users were dropped roughly an hour in.
+
+Neither suite caught it, and it is worth understanding why rather than adding
+more checks blindly: `verify-routing.ps1` and `test-notifications.ps1` both reach
+Supabase directly, server-side, so they pass identically whether or not anything
+above the data seam is real. A green suite against production said nothing about
+the seam, because the seam is not on their path.
+
+Both defaults now require the literal string `mock` to opt out of the real
+stack, so an unset variable fails loudly on missing Supabase keys instead of
+quietly serving fiction. Setting it explicitly is still the right move:
+
+```powershell
+npx vercel env add NEXT_PUBLIC_DATA_SOURCE production   # value: supabase
+npx vercel --prod
+```
+
+The redeploy is not optional. `NEXT_PUBLIC_*` variables are inlined at build
+time, so adding one without rebuilding changes nothing.
+
+## Dev 2: Phase 6 is built, and it is sitting in your lane
+
+Phases 1 through 5 are done and good. Phase 6 — the handover interview — was
+not started: `lib/ai/prompts.ts` has the `handover` variant and `/api/ai/chat`
+accepts `mode: "handover"`, but nothing connected either to a posting, wrote
+`continuity_briefs`, produced a `generated_brief`, or flipped
+`reviewed_by_employee`. Master checklist line 518 needs both halves and only
+mine existed; I had been building against a brief hand-seeded through
+`scripts/seed-continuity-brief.sql`, which is not a thing that can be demoed.
+
+So it is built, in `app/handover/**` and `lib/handover/**` — deliberately not
+in `app/coach/**` or `app/chatbot/**`, so nothing you are pushing collides with
+it. What landed:
+
+- `lib/handover/interview.ts` — a six-question script that maps one-to-one onto
+  `RawInterview`, plus `composeBriefLocally`, which assembles the brief prose
+  from the answers.
+- `lib/handover/compose.ts` — `composeBrief`, which calls the model when
+  `isLiveAI()` and falls back to the local composer when there is no key or the
+  call fails. Kept in its own file so the client form can import the questions
+  without pulling the AI SDK into the browser bundle; wiring it back into
+  `interview.ts` costs 148 kB on that route, which is how it was found.
+- `app/handover/[postingId]` — interview, generated brief, redact, approve.
+- `saveBriefDraft` / `setBriefReviewed` / `getBriefDraft` / `getBriefStatus` on
+  both adapters.
+
+**It is deterministic, and that is a choice, not a shortcut.** The same
+reasoning as `AI_MODE=stub` in the sandbox grader: this has to work at a venue
+with no network on a laptop with no key. The answers are real, the row is real,
+and a scripted run and a model-driven run produce an identical
+`raw_interview_json`.
+
+**Swapping in your streaming interview should be a small change.** Your
+`handover` prompt already asks for the same five things. The seam is
+`toRawInterview(answers)` in `lib/handover/interview.ts`: produce a
+`RawInterview` from your transcript instead of from the form, hand it to
+`saveBriefDraft`, and every downstream piece — the redaction gate, challenge
+generation, the node tree, grading — works unchanged. Please do not move the
+approval step while you are in there. `setBriefReviewed` is the only thing
+standing between an unredacted client name and a candidate's screen, and
+`lib/data/supabase/adapter.ts` reads past the brief policy on the strength of
+it.
+
+`npm run verify:mock` covers the chain end to end, 46 checks, including that an
+unapproved brief stays off the employer's page and that editing an approved one
+sends it back behind the gate.

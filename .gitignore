@@ -45,5 +45,6 @@ supabase/.branches
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
-.env*
+# local verification scratch
+__pycache__/
+.devserver.log

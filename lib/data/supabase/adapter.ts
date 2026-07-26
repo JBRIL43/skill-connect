@@ -155,6 +155,23 @@ export const supabaseRepository: DataRepository = {
     );
   },
 
+  // Session client: 0002 lets a candidate insert their own matrix, and this is
+  // always the candidate acting on their own row.
+  async saveSkillMatrix(input) {
+    const { data, error } = await (await db())
+      .from("skill_matrices")
+      .insert({
+        user_id: input.user_id,
+        skills_json: input.skills_json,
+        readiness_score: input.readiness_score,
+      })
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data as SkillMatrix;
+  },
+
   async savePostingEmbedding(postingId, vector) {
     // The SME owns the posting, but 0005 does not grant them the embedding
     // column, and the vector is engine output rather than something they typed.

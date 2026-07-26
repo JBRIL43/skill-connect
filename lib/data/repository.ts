@@ -51,6 +51,12 @@ export type CompanyProfilePatch = Partial<
   >
 >;
 
+export type SkillMatrixInput = {
+  user_id: string;
+  skills_json: SkillMatrix["skills_json"];
+  readiness_score: number;
+};
+
 export type BriefDraftInput = {
   posting_id: string;
   raw_interview_json: RawInterview;
@@ -86,6 +92,13 @@ export interface DataRepository {
   ): Promise<CompanyProfile | null>;
 
   getSkillMatrix(userId: string): Promise<SkillMatrix | null>;
+
+  /**
+   * Pillar 1's coach output. Through the seam rather than a direct insert, so
+   * the offline demo can produce a skill map at all, and so the matcher reads
+   * the coach's work from the same place in both modes.
+   */
+  saveSkillMatrix(input: SkillMatrixInput): Promise<SkillMatrix>;
 
   /**
    * pgvector persistence for Section 3's semantic search. Service role in

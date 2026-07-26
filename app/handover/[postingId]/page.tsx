@@ -23,6 +23,7 @@ import {
   INTERVIEW_QUESTIONS,
   type InterviewAnswers,
 } from "@/lib/handover/interview";
+import { normalizeInterview } from "@/lib/handover/normalize";
 import { TONE } from "@/lib/tones";
 
 import { InterviewForm } from "./interview-form";
@@ -152,7 +153,11 @@ async function ownerInterview(postingId: string) {
 
   const draft = await repo().getBriefDraft(postingId);
   const approved = Boolean(draft?.reviewed_by_employee);
-  const raw = (draft?.raw_interview_json as RawInterview | null) ?? null;
+  // Normalized so a brief recorded through Dev 2's token flow reloads into
+  // these fields too, rather than showing the SME an empty interview.
+  const raw = draft
+    ? normalizeInterview(draft.raw_interview_json, draft.generated_brief)
+    : null;
 
   return (
     <div className="min-h-svh">

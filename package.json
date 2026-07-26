@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
     "check:contracts": "python3 scripts/check-contracts.py",
+    "check:interview": "tsx scripts/check-interview-shapes.ts",
     "verify:mock": "python3 scripts/verify-mock-flows.py",
+    "verify:coach": "python3 scripts/verify-coach.py",
     "verify:live": "python3 scripts/verify-live.py",
     "verify:flows": "python3 scripts/verify-app-flows.py"
   },

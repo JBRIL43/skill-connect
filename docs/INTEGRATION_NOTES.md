@@ -331,3 +331,95 @@ it.
 `npm run verify:mock` covers the chain end to end, 46 checks, including that an
 unapproved brief stays off the employer's page and that editing an approved one
 sends it back behind the gate.
+
+> Superseded in part, an hour later, by `f992fd3`. Dev 2 shipped Phase 6 in the
+> same window. Both survived the merge; see the next section for how.
+
+## Dev 2 + Dev 3: we both built Phase 6, and the shapes did not match
+
+`f992fd3` and `788cb2f` landed within the hour, both implementing the handover
+interview, neither aware of the other. Both are in `main`. Nothing was thrown
+away, but two things had to be reconciled and one of them was a real bug.
+
+### The route now has two doors
+
+`/handover/[postingId]` dispatches on the token:
+
+| URL | Whose | Who it is for | Needs |
+| --- | --- | --- | --- |
+| `?token=...` | Dev 2 | the departing employee, who has no account | `HANDOVER_SIGNING_SECRET`, `OPENAI_API_KEY` |
+| no token | Dev 3 | the owning SME, handing over their screen | nothing |
+
+Dev 2's is the better answer to Section 9 — an expiring HMAC link is what an
+employee without an account actually needs, and I had explicitly scoped that
+out. Dev 3's runs with no key, no secret and no network, which is what the demo
+has to survive. Keeping both costs one `if` and loses nothing. The SME's screen
+links to `/handover/invite` for anyone who would rather send the link.
+
+### The bug: two `raw_interview_json` shapes, failing silently
+
+Both sides documented their shape as the frozen Dev 3 contract, in
+`lib/ai/handover.ts` and in `lib/data/types.ts`, and they are different:
+
+```jsonc
+// Dev 2 writes the transcript
+{ "version": 1, "locale": "en", "completed_at": "...", "messages": [ ... ] }
+
+// Dev 3's challenge generator reads structured answers
+{ "role_title": "...", "recurring_tasks": [ ... ], "tools": [ ... ] }
+```
+
+Feed the transcript to `lib/ai/challenge-gen.ts` and nothing throws. There is no
+`role_title`, so the challenge is called "Transition role"; there are no
+`recurring_tasks`, so the scenario is the generic fallback. It renders, it
+grades, it looks fine — and Pillar 3b's entire premise, scoring a replacement on
+the actual job, has quietly stopped happening. That is a worse failure than a
+crash, because nothing surfaces it.
+
+`lib/handover/normalize.ts` now reads both. For the transcript shape it
+reconstructs the structured fields from the approved markdown brief, whose
+headings (`## Recurring tasks`, `## Tools and systems`, `## Coordination`) are
+exactly where Dev 2's structure went — and which has the advantage of being the
+reviewed text rather than the raw transcript. `npm run check:interview` asserts
+both shapes produce a challenge that quotes the real work.
+
+`ContinuityBrief.raw_interview_json` is typed `StoredInterview` rather than
+`RawInterview`, because typing it as one shape when two are written is how this
+comes back.
+
+## Dev 2: the coach works without an API key now
+
+The audit line above ("the coach throws when no LLM key is set") was still true
+at `f992fd3`, just relocated into `getAiModel()` in `lib/ai/model.ts`. The
+consequence for a job seeker: `/coach` renders perfectly, and then returns 503
+on the first message they send. The page looks healthy right up until somebody
+uses it, which is the worst place to discover it — and no key is the state this
+repo is actually in.
+
+`lib/ai/stub-coach.ts` is the same bargain the sandbox grader already makes
+under `AI_MODE=stub`: a fixed question ladder, and a skill matrix read out of
+the transcript by keyword signal in both scripts. It does not pretend to be a
+language model. It asks real questions in order and derives numbers a candidate
+can trace back to a sentence they typed, which beats a 503 and beats invented
+scores. Recommendations rank the real catalog by weakest mapped competency and
+go through `isSandboxNodeId`, so a stub recommendation cannot deep-link to a
+challenge that does not exist.
+
+`hasLiveAiKey()` gates it: a key alone is enough to go live, and `AI_MODE=stub`
+forces deterministic even with one. All three routes branch on it; the live path
+is untouched.
+
+Two other changes in your lane, both needed to make that reachable:
+
+- **`/api/ai/skills` writes through `repo().saveSkillMatrix()`** instead of
+  inserting into Supabase directly. It was returning `TypeError: fetch failed`
+  in mock mode. Going through the seam also means the matcher reads the coach's
+  output from the same place in both modes.
+- **`getSessionProfile()` resolves a fixture profile when
+  `NEXT_PUBLIC_DATA_SOURCE=mock`.** Every page behind it, including `/coach`,
+  used to redirect to a login that cannot succeed offline. It needs the literal
+  string `mock`, so in any configuration that can reach real data it never runs.
+
+`npm run verify:coach` is 20 checks: a seeker holds the conversation, gets a
+skill map that varies with what they said, an employer is refused, and every
+recommended challenge opens.

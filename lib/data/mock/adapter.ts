@@ -18,6 +18,7 @@ import type {
   Role,
   RoleSkillTemplate,
   SandboxScore,
+  SkillMatrix,
 } from "@/lib/data/types";
 
 const now = () => new Date().toISOString();
@@ -87,6 +88,34 @@ export const mockRepository: DataRepository = {
 
   async getSkillMatrix(userId) {
     return store().skillMatrices.find((row) => row.user_id === userId) ?? null;
+  },
+
+  // Replaces rather than appends. Supabase keeps every run and reads the newest
+  // by created_at; one row per user is the same thing observed through
+  // getSkillMatrix, without dating fixtures precisely enough to sort them.
+  async saveSkillMatrix(input) {
+    const rows = store().skillMatrices;
+    const existing = rows.find((row) => row.user_id === input.user_id);
+
+    if (existing) {
+      existing.skills_json = input.skills_json;
+      existing.readiness_score = input.readiness_score;
+      // The vector described the previous answers, so it no longer describes
+      // this candidate. runMatch recomputes it on the next run.
+      existing.embedding = null;
+      return existing;
+    }
+
+    const created: SkillMatrix = {
+      id: `sm-${input.user_id}`,
+      user_id: input.user_id,
+      skills_json: input.skills_json,
+      readiness_score: input.readiness_score,
+      embedding: null,
+      created_at: now(),
+    };
+    rows.push(created);
+    return created;
   },
 
   async savePostingEmbedding(postingId, vector) {

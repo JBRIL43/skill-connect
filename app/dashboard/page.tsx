@@ -53,6 +53,12 @@ const SME_LINKS: Destination[] = [
     description:
       "Your public page and AI-adoption journey, plus your verification status.",
   },
+  {
+    href: "/dashboard/upgrade",
+    title: "Upgrade to Premium",
+    description:
+      "Auto-notify on every role you hire for, and priority Institutional Handover.",
+  },
 ];
 
 export default async function DashboardPage() {

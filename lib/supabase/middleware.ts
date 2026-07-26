@@ -11,9 +11,15 @@ const PUBLIC_PREFIXES = [
   "/company-profile",
   "/readiness",
   // Token-gated outgoing-employee interview (Dev 2 Phase 6). Auth is enforced
-  // by HANDOVER_SIGNING_SECRET HMAC, not Supabase session. See
-  // docs/INTEGRATION_NOTES.md.
+  // by HANDOVER_SIGNING_SECRET HMAC, not Supabase session. The owner-gated door
+  // on the same route checks the session itself. See docs/INTEGRATION_NOTES.md.
   "/handover",
+  // Telebirr POSTs here from their own servers with no session. Without this it
+  // would be redirected to /login, and a 307 is indistinguishable from success
+  // at their end -- the payment would simply never be recorded. The route
+  // authenticates the notification by asking the gateway about the order rather
+  // than by trusting the caller.
+  "/api/payments/telebirr/notify",
 ];
 
 function isPublic(pathname: string) {

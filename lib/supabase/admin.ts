@@ -4,7 +4,9 @@ import { supabaseServiceRoleKey, supabaseUrl } from "./env";
 
 /**
  * Bypasses RLS entirely. Only for the admin console, the notification check,
- * the seed-data action, and the payment webhook — all server-side.
+ * the seed-data action, the payment webhook, and continuity-brief writes from
+ * the token-gated handover interview (no client write policy by design) —
+ * all server-side.
  *
  * Never import this into a client component or a route a non-admin can reach.
  */

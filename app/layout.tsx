@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_Ethiopic } from "next/font/google";
 
+import { AuthenticatedChatbot } from "@/app/chatbot/_components/authenticated-chatbot";
 import { Toaster } from "@/components/ui/sonner";
 
 import "./globals.css";
@@ -41,6 +42,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${notoEthiopic.variable} antialiased`}
       >
         {children}
+        <AuthenticatedChatbot />
         <Toaster />
       </body>
     </html>

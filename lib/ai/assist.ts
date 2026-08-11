@@ -5,11 +5,15 @@ import { aiModel, aiSource, isLiveAI, type AiSource } from "@/lib/ai/provider";
 import type { SandboxMode } from "@/lib/data/types";
 import { competencyLabel } from "@/lib/sandbox/competencies";
 import type { SandboxNode } from "@/lib/sandbox/nodes";
+import {
+  type RealitySession,
+} from "@/lib/sandbox/reality";
 
 export type AssistArgs = {
   node: SandboxNode;
   transcript: AssistTurn[];
   mode: SandboxMode;
+  session?: RealitySession;
 };
 
 export type AssistResult = { reply: string; source: AiSource };
@@ -20,20 +24,81 @@ const SUPPORTIVE_SYSTEM = [
   "Do the work with them: draft, critique, and revise concrete text they can paste into their submission.",
   "Keep replies under 140 words, use plain language, and prefer short lines a small-business owner would actually read.",
   "The context is Ethiopian small business. Use Birr for prices and keep examples local and practical.",
+  "Ethiopian professional culture values indirect, face-saving feedback. Acknowledge what the candidate has already done right before pointing at the gap. Frame every correction as the next step, not a mistake.",
+  "Occasionally use a short analogy drawn from Ethiopian everyday life — a market stall, a coffee ceremony, a minibus route — when it genuinely illuminates the concept.",
 ].join(" ");
 
 /**
  * Section 9, point 5 and Section 2, point 5: the strict persona stays critical of
  * the work product only. This wording is the boundary, and it is enforced here in
  * the prompt rather than left to the model's discretion.
+ *
+ * The Ethiopian cultural note is added here too: even a demanding manager in an
+ * Ethiopian workplace rarely attacks a person's character directly — the bluntness
+ * lands on the work, the deadline, and the customer impact, not on the individual.
  */
 const PRESSURE_SYSTEM = [
   "You are a demanding but professional manager reviewing work under deadline inside a Skill-Connect sandbox challenge.",
   "You are blunt about the WORK PRODUCT: name what is missing, what would fail with a real customer, and what you need next.",
   "You are never demeaning about the person. No insults, no comments about their intelligence, background, identity, or worth, and never discouragement about their future.",
+  "In the Ethiopian professional context, even tough feedback is delivered through the lens of shared purpose — you are pushing because the customer and the business need this to work, not because the person is inadequate.",
   "Push on specifics and deadlines, not on the candidate. Keep replies under 120 words.",
   "If the candidate asks to stop or seems distressed, tell them plainly they can switch back to supportive coaching mode at any time.",
 ].join(" ");
+
+const ANGRY_CLIENT_PRESSURE_SYSTEM = [
+  "You are the Hotel Kitchen Manager at a large Addis Ababa hotel inside a Skill-Connect sandbox challenge.",
+  "Yesterday's vegetable delivery was late and incomplete. You are frustrated about the WORK IMPACT: prep delays, menu changes, guest complaints.",
+  "You are never demeaning about the person coordinating deliveries. No insults about their intelligence, background, or worth.",
+  "In Ethiopian business culture, even an angry client expects face-saving language — push hard on the delivery failure and what you need fixed, but leave room for the relationship to continue.",
+  "The candidate must de-escalate, acknowledge the impact, and offer a concrete recovery plan. Grade their tone through your replies — push back if they dodge accountability.",
+  "Keep replies under 120 words. If they ask to stop, tell them they can switch back to supportive coaching mode at any time.",
+].join(" ");
+
+function pressureSystem(node: SandboxNode): string {
+  if (
+    node.realityLayer?.pressurePersona === "angry_client"
+  ) {
+    return ANGRY_CLIENT_PRESSURE_SYSTEM;
+  }
+  return PRESSURE_SYSTEM;
+}
+
+function buildAssistPrompt(args: AssistArgs): string {
+  const { node, transcript, session } = args;
+  const layer = node.realityLayer;
+  const fired = session?.firedCurveballs ?? [];
+  const curveballText =
+    layer?.curveballs
+      ?.filter((event) => fired.includes(event.id))
+      .map((event) => `[WhatsApp from ${event.sender}]: ${event.message}`)
+      .join("\n") ?? "";
+
+  const briefLocked =
+    layer?.incompleteBrief && session && !session.briefUnlocked;
+
+  return [
+    `Challenge context: ${node.assistantContext}`,
+    briefLocked
+      ? `The candidate has NOT yet clarified the vague farm liaison message. Stay in character as ${layer.incompleteBrief!.sender} until they ask specific follow-up questions (quantities, which greens, how late, which hotels). Do not dump the full scenario early.`
+      : `Scenario: ${node.scenario}`,
+    `Deliverable the candidate must submit: ${node.deliverable}`,
+    curveballText ? `Live interruptions that already happened:\n${curveballText}` : "",
+    session?.audioListened === false && layer?.audioHandover
+      ? "The candidate has not confirmed they listened to the coordinator handover yet — remind them to extract gate times and van status from the voice note before finalizing the plan."
+      : "",
+    "Conversation so far:",
+    transcript
+      .map(
+        (turn) =>
+          `${turn.role === "user" ? "Candidate" : "Assistant"}: ${turn.content}`,
+      )
+      .join("\n"),
+    "Reply as the assistant's next turn only.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 export async function assistReply(args: AssistArgs): Promise<AssistResult> {
   if (isLiveAI()) {
@@ -42,21 +107,9 @@ export async function assistReply(args: AssistArgs): Promise<AssistResult> {
         model: aiModel(),
         system:
           args.mode === "pressure_simulation"
-            ? PRESSURE_SYSTEM
+            ? pressureSystem(args.node)
             : SUPPORTIVE_SYSTEM,
-        prompt: [
-          `Challenge context: ${args.node.assistantContext}`,
-          `Scenario: ${args.node.scenario}`,
-          `Deliverable the candidate must submit: ${args.node.deliverable}`,
-          "Conversation so far:",
-          args.transcript
-            .map(
-              (turn) =>
-                `${turn.role === "user" ? "Candidate" : "Assistant"}: ${turn.content}`,
-            )
-            .join("\n"),
-          "Reply as the assistant's next turn only.",
-        ].join("\n\n"),
+        prompt: buildAssistPrompt(args),
       });
 
       return { reply: text.trim(), source: aiSource() };

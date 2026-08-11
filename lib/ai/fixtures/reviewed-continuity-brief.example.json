@@ -1,0 +1,45 @@
+{
+  "posting_id": "00000000-0000-4000-8000-000000000001",
+  "reviewed_by_employee": true,
+  "custom_node_id": null,
+  "generated_brief": "# Inventory Coordinator Continuity Brief\n\nOutgoing coordinator for a Merkato retail counter. Focuses on daily stock checks, WhatsApp reorder messages, and coordinating with the warehouse supervisor by role.\n\n## Recurring tasks\n- Open the shop inventory notebook and count fast-moving items before 9am\n- Send restock requests to the warehouse supervisor by WhatsApp\n- Update the handwritten price board when supplier costs change\n\n## Tools and systems\n- Shop inventory notebook\n- WhatsApp Business for supplier and warehouse coordination\n- Calculator app for margin checks\n\n## Decision points\n- Reorder when fewer than one box of a fast-moving item remains\n- Escalate supplier delays to the shop owner if stock will run out within two days\n\n## Shortcuts\n- Keep a pinned WhatsApp note with the top 20 SKUs and usual pack sizes\n\n## Coordination\n- Warehouse supervisor for restock timing\n- Shop owner for price changes above 10%\n\n## Common failure modes\n- Forgetting to log evening sales leads to false stockouts the next morning\n- Mixing lookalike SKUs when counting under rush conditions\n\n## Onboarding checklist\n- Shadow one morning count and one evening close\n- Practice drafting a restock WhatsApp using role titles only\n- Review the pinned top-20 SKU list before the first solo shift",
+  "raw_interview_json": {
+    "version": 1,
+    "locale": "en",
+    "completed_at": "2026-07-26T00:00:00.000Z",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "What recurring tasks do you handle most days in this role?"
+      },
+      {
+        "role": "user",
+        "content": "I open the inventory notebook, count fast-moving items before 9am, and send restock requests to the warehouse supervisor on WhatsApp."
+      },
+      {
+        "role": "assistant",
+        "content": "Which tools or systems are essential for those tasks?"
+      },
+      {
+        "role": "user",
+        "content": "The inventory notebook, WhatsApp Business, and a calculator for margin checks when supplier costs change."
+      },
+      {
+        "role": "assistant",
+        "content": "What decisions do you make without waiting for the shop owner?"
+      },
+      {
+        "role": "user",
+        "content": "I reorder when fewer than one box remains. If a supplier delay will empty stock within two days, I escalate to the shop owner."
+      },
+      {
+        "role": "assistant",
+        "content": "Where do mistakes usually happen?"
+      },
+      {
+        "role": "user",
+        "content": "Forgetting the evening sales log creates false stockouts, and lookalike SKUs get mixed during rush counting."
+      }
+    ]
+  }
+}

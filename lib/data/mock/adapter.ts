@@ -9,7 +9,6 @@ import type {
 } from "@/lib/data/repository";
 import type {
   Badge,
-  ContinuityBrief,
   GeneratedChallenge,
   Match,
   MatchStatus,
@@ -18,7 +17,6 @@ import type {
   Role,
   RoleSkillTemplate,
   SandboxScore,
-  SkillMatrix,
 } from "@/lib/data/types";
 
 const now = () => new Date().toISOString();
@@ -88,34 +86,6 @@ export const mockRepository: DataRepository = {
 
   async getSkillMatrix(userId) {
     return store().skillMatrices.find((row) => row.user_id === userId) ?? null;
-  },
-
-  // Replaces rather than appends. Supabase keeps every run and reads the newest
-  // by created_at; one row per user is the same thing observed through
-  // getSkillMatrix, without dating fixtures precisely enough to sort them.
-  async saveSkillMatrix(input) {
-    const rows = store().skillMatrices;
-    const existing = rows.find((row) => row.user_id === input.user_id);
-
-    if (existing) {
-      existing.skills_json = input.skills_json;
-      existing.readiness_score = input.readiness_score;
-      // The vector described the previous answers, so it no longer describes
-      // this candidate. runMatch recomputes it on the next run.
-      existing.embedding = null;
-      return existing;
-    }
-
-    const created: SkillMatrix = {
-      id: `sm-${input.user_id}`,
-      user_id: input.user_id,
-      skills_json: input.skills_json,
-      readiness_score: input.readiness_score,
-      embedding: null,
-      created_at: now(),
-    };
-    rows.push(created);
-    return created;
   },
 
   async savePostingEmbedding(postingId, vector) {
@@ -333,57 +303,6 @@ export const mockRepository: DataRepository = {
     return store().continuityBriefs.filter(
       (row) => row.reviewed_by_employee && postingIds.has(row.posting_id),
     );
-  },
-
-  async getBriefStatus(postingId) {
-    const row = store().continuityBriefs.find(
-      (item) => item.posting_id === postingId,
-    );
-    return { exists: Boolean(row), reviewed: Boolean(row?.reviewed_by_employee) };
-  },
-
-  // Unfiltered on purpose, mirroring the supabase elevated read. Redaction
-  // screen only, and only behind an ownership check.
-  async getBriefDraft(postingId) {
-    return (
-      store().continuityBriefs.find((row) => row.posting_id === postingId) ??
-      null
-    );
-  },
-
-  // One brief per posting, so re-running the interview replaces the draft.
-  // Approval is revoked on every save: edited text has not been reviewed.
-  async saveBriefDraft(input) {
-    const rows = store().continuityBriefs;
-    const existing = rows.find((row) => row.posting_id === input.posting_id);
-
-    if (existing) {
-      existing.raw_interview_json = input.raw_interview_json;
-      existing.generated_brief = input.generated_brief;
-      existing.reviewed_by_employee = false;
-      return existing;
-    }
-
-    const created: ContinuityBrief = {
-      id: `brief-${input.posting_id}`,
-      posting_id: input.posting_id,
-      raw_interview_json: input.raw_interview_json,
-      generated_brief: input.generated_brief,
-      custom_node_id: null,
-      reviewed_by_employee: false,
-      created_at: new Date().toISOString(),
-    };
-    rows.push(created);
-    return created;
-  },
-
-  async setBriefReviewed(postingId, reviewed, generatedBrief) {
-    const row = store().continuityBriefs.find(
-      (item) => item.posting_id === postingId,
-    );
-    if (!row) return;
-    row.reviewed_by_employee = reviewed;
-    if (generatedBrief !== undefined) row.generated_brief = generatedBrief;
   },
 
   async setBriefCustomNode(briefId, nodeId) {

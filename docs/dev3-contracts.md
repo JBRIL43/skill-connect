@@ -141,9 +141,6 @@ empty array that reads exactly like a scoring bug. The split in
 | `matches` insert and update | session | `owns_posting()` is tighter than the service role |
 | reviewed brief behind a transition challenge | service role | the candidate taking it never owns the posting |
 | open transition postings, for the node tree | session | 0002 lets any signed-in user read an open posting |
-| handover interview and brief writes | service role | same table, same absent write policy |
-| brief draft read, on the redaction screen only | service role | somebody has to read the text in order to redact it |
-| `getBriefStatus`, two booleans and no content | service role | lets the posting page offer the interview without holding the draft |
 
 The service role bypasses RLS entirely, so it stays in route handlers and server
 actions and is never imported into a client component.
@@ -171,39 +168,6 @@ mutation run confirms the node-tree check fails when the tree is derived from th
 in-process memo again, but the candidate-can-open check passes either way in mock.
 Proving the policy half needs `verify:flows` against live Supabase with a job
 seeker session, which is the one gap left in this area.
-
-### The handover interview reads pre-redaction text, and who sees it
-
-Phase 6 was never built, so I built it — `app/handover/[postingId]`, writing
-through `saveBriefDraft` and `setBriefReviewed`. Two things in it are worth
-objecting to before someone finds them in the code and assumes they were an
-accident.
-
-**It reads an unreviewed brief.** 0002's comment says an unreviewed brief is
-invisible to everyone, "including the SME who paid for it, because it may still
-contain client names the outgoing employee has not had a chance to redact." The
-redaction screen is the one place that cannot honour that and still function:
-the text has to be on screen to be cut. 0002 anticipates this — "the review step
-runs through a server route using the service role" — and `getBriefDraft` is
-that route, called from exactly one page and nowhere else. Every other read in
-the codebase is still reviewed-only.
-
-**The SME opens it, not the departing employee.** Section 9 has that employee
-possibly holding no account at all, which means a signed token link, an
-expiry, and a revocation path. That is a real auth surface and this is a
-48-hour build, so the screen is owner-gated with the same `requireOwnedPosting`
-check the matcher actions use, and presented as "hand this to your departing
-colleague." The consequence is the honest one: on this screen, the employer can
-see the draft before it is redacted. It is narrower than a guessable link would
-be, and it is the trade-off to revisit first if this goes past a demo.
-
-Two invariants hold the gate shut either way. Approval is never implicit —
-saving an interview writes the draft and nothing else. And saving *revokes*
-approval, in both adapters, because otherwise editing an approved brief would
-ship text nobody reviewed under a flag that says somebody did. `verify:mock`
-asserts both, along with the full chain: the employer's page shows "Awaiting
-approval" without the prose, challenge generation is refused until approval,
-and after approval the page serves the redacted text rather than the draft.
 
 ---
 

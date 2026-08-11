@@ -54,9 +54,8 @@ export async function gapAnalysis(input: GapInput): Promise<string> {
         system: [
           "You write a two-sentence Gap Analysis for an Ethiopian SME reviewing a candidate on Skill-Connect.",
           "Sentence one: the candidate's clearest strength for this role, with the number.",
-          "Sentence two: what onboarding or support they would need, framed as a practical investment rather than a deficiency — Ethiopian hiring is relationship-based and the SME will be building with this person, not just checking a box.",
+          "Sentence two: what onboarding or support they would need, framed practically.",
           "Never speculate about the person's background, character, or personal circumstances — only the scores given.",
-          "Keep language plain, warm, and direct enough to be useful without being harsh.",
         ].join(" "),
         prompt: `Role: ${input.roleName}\nCandidate first name: ${input.candidateFirstName}\nVerified scores versus role thresholds:\n${lines}`,
       });

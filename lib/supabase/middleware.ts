@@ -16,6 +16,10 @@ const PUBLIC_PREFIXES = [
   // authenticates the notification by asking the gateway about the order rather
   // than by trusting the caller.
   "/api/payments/telebirr/notify",
+  // Token-gated outgoing-employee interview (Dev 2 Phase 6). Auth is enforced
+  // by HANDOVER_SIGNING_SECRET HMAC, not Supabase session. See
+  // docs/INTEGRATION_NOTES.md.
+  "/handover",
 ];
 
 function isPublic(pathname: string) {

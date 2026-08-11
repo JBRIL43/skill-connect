@@ -22,8 +22,6 @@ const DEFAULT_DEMO_PROFILE = "js-selam";
  * data, because in supabase mode it never runs.
  */
 export async function currentProfile(): Promise<Profile | null> {
-  // getSessionProfile resolves the same fixture in mock mode, so the two agree
-  // on who is acting whichever helper a page happens to call.
   if (repo().kind === "supabase") return getSessionProfile();
 
   const selected = (await cookies()).get(DEMO_PROFILE_COOKIE)?.value;

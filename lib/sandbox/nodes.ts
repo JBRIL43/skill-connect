@@ -1,5 +1,4 @@
 import type { CompetencyKey } from "@/lib/sandbox/competencies";
-import type { RealityLayer } from "@/lib/sandbox/reality";
 
 /**
  * Shared by the grade route's validation and the submit button's disabled state,
@@ -37,8 +36,6 @@ export type SandboxNode = {
   badgeName: string;
   /** Section 2 point 5: only some nodes may run the strict-manager persona. */
   pressureSimulationAllowed: boolean;
-  /** Optional multimodal inputs, curveballs, and incomplete briefs. */
-  realityLayer?: RealityLayer;
   /** Set for AI-generated Pillar 3b challenges. */
   generatedFromPostingId?: string;
 };
@@ -82,32 +79,6 @@ export const SANDBOX_NODES: SandboxNode[] = [
     requires: [],
     badgeName: "AI Catalog Builder",
     pressureSimulationAllowed: false,
-    realityLayer: {
-      sourceArtifacts: [
-        {
-          kind: "image",
-          title: "Hanna's notebook page",
-          description:
-            "Coffee-stained handwritten prices — reconcile these against the clean export before you build the catalog.",
-          src: "/sandbox/hanna-notebook.svg",
-          alt: "Handwritten fabric prices in a notebook with coffee stains",
-        },
-        {
-          kind: "data",
-          title: "Clean export from Hanna's cousin",
-          description: "Spreadsheet dump — some lines disagree with the notebook.",
-          format: "json",
-          payload: `[
-  { "fabric": "Shiro cotton", "pricePerMeter": 280, "inStock": true },
-  { "fabric": "Netela white", "pricePerMeter": 350, "inStock": true },
-  { "fabric": "Tibeb border", "pricePerMeter": 420, "inStock": false },
-  { "fabric": "Gabi grey", "pricePerMeter": 310, "inStock": true },
-  { "fabric": "Shemma traditional", "pricePerMeter": 890, "inStock": true },
-  { "fabric": "Linen blend", "pricePerMeter": 450, "inStock": true }
-]`,
-        },
-      ],
-    },
   },
   {
     id: "retail-inventory-tracker",
@@ -158,9 +129,9 @@ export const SANDBOX_NODES: SandboxNode[] = [
     summary:
       "Produce spoils, one van breaks down, and a hotel changes its order. Build a schedule that survives contact with reality.",
     scenario:
-      "Selam Foods is a vegetable cooperative outside Addis Ababa. Two vans serve eight restaurants and two hotels. Produce spoils within about two days. You are covering for the regular coordinator today — start from the handwritten delivery note and the clean dispatch sheet, listen to Dawit's handover voice note, and clarify what the farm liaison actually meant before you commit to a plan.",
+      "A cooperative outside Addis Ababa supplies vegetables to eight restaurants and two hotels using two vans. Produce arrives from farms early morning, spoils within about two days, and the biggest hotel changes its order quantity with a day's notice. Yesterday one van broke down at 6am and three deliveries were missed.",
     deliverable:
-      "A morning dispatch plan for the two vans reconciled against the note and sheet, the rule for deciding what gets dropped or delayed when a van is down or a road closes, and a short de-escalation message to a hotel kitchen manager whose delivery slips.",
+      "A morning dispatch plan for the two vans, the rule for deciding what gets dropped or delayed when a van is down, and a short message the coordinator sends a customer whose delivery slips.",
     rubric: [
       {
         competency: "process_thinking",
@@ -182,89 +153,10 @@ export const SANDBOX_NODES: SandboxNode[] = [
       },
     ],
     assistantContext:
-      "The user is completing a Skill-Connect sandbox challenge for Selam Foods, a vegetable cooperative near Addis Ababa that delivers to restaurants and hotels with two vans.",
+      "The user is completing a Skill-Connect sandbox challenge for a vegetable-supply cooperative near Addis Ababa that delivers to restaurants and hotels with two vans.",
     requires: ["retail-inventory-tracker"],
     badgeName: "Operations Planner",
     pressureSimulationAllowed: true,
-    realityLayer: {
-      incompleteBrief: {
-        sender: "Farm liaison — Bishoftu",
-        vagueMessage:
-          "Selam, we have plenty of greens today but the other truck is late. Send what you can to the big hotels first — you know which ones.",
-        clarifyingSignals: [
-          "which greens",
-          "what greens",
-          "how late",
-          "how many",
-          "which hotels",
-          "which truck",
-          "quantity",
-          "eta",
-          "when",
-          "specific",
-        ],
-        minClarifications: 2,
-      },
-      sourceArtifacts: [
-        {
-          kind: "image",
-          title: "Handwritten delivery note",
-          description:
-            "Dawit left this on the dashboard — reconcile it against the dispatch sheet. Numbers and names do not always match.",
-          src: "/sandbox/delivery-note.svg",
-          alt: "Coffee-stained handwritten vegetable delivery note",
-        },
-        {
-          kind: "data",
-          title: "Clean dispatch sheet",
-          description: "System export for today's planned stops.",
-          format: "json",
-          payload: `{
-  "date": "2026-08-12",
-  "vans": ["Van 1", "Van 2"],
-  "stops": [
-    { "customer": "Sheraton Addis kitchen", "items": "60kg mixed greens", "window": "06:00-07:00" },
-    { "customer": "Lucy Hotel", "items": "40kg mixed veg", "window": "06:30-07:30" },
-    { "customer": "Tomoca Restaurant", "items": "8 crate onion", "window": "07:00-08:00" },
-    { "customer": "Hilton Addis", "items": "25kg potato, 5kg herbs", "window": "07:00-08:30" }
-  ],
-  "van2Status": "maintenance — belt failure 05:40"
-}`,
-        },
-      ],
-      audioHandover: {
-        title: "Outgoing coordinator handover",
-        sender: "Dawit (outgoing coordinator)",
-        durationSeconds: 45,
-        script:
-          "Selam — quick handover. Van two is dead, belt went at five forty. Sheraton bumped greens to eighty kilos and their gate closes at seven, not seven thirty like the sheet says. Lucy is furious about yesterday — treat them first after Sheraton. Bishoftu farm truck is two hours late so load van one twice if you have to. Call me if Hilton asks about herbs again.",
-        keyFacts: [
-          "van 2",
-          "belt",
-          "sheraton",
-          "80",
-          "seven",
-          "7",
-          "lucy",
-          "bishoftu",
-          "two hours",
-          "hilton",
-          "herbs",
-        ],
-      },
-      curveballs: [
-        {
-          id: "road-blocked",
-          trigger: "afterSubmissionChars",
-          threshold: 120,
-          channel: "whatsapp",
-          sender: "Driver 1 — Abebe",
-          message:
-            "Selam, road to Sheraton blocked by construction near Bole. Traffic not moving. What do I do?",
-        },
-      ],
-      pressurePersona: "angry_client",
-    },
   },
 ];
 

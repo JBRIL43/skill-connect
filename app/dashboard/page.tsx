@@ -42,6 +42,12 @@ const SME_LINKS: Destination[] = [
       "Set the bar once, then get notified whenever a candidate clears it.",
   },
   {
+    href: "/handover/invite",
+    title: "AI Handover Interview",
+    description:
+      "Send a private link so an outgoing employee can review a Continuity Brief before it becomes usable.",
+  },
+  {
     href: "/company-profile",
     title: "Your company profile",
     description:

@@ -11,8 +11,6 @@ import {
 import { getSessionProfile, homePathForRole } from "@/lib/auth";
 
 export default async function SignupPage() {
-  if (process.env.NEXT_PUBLIC_DATA_SOURCE === "mock") redirect("/demo");
-
   const profile = await getSessionProfile();
   if (profile) redirect(homePathForRole(profile.role));
 

@@ -59,7 +59,6 @@ async function draftWithModel(problem: string): Promise<TemplateDraft> {
       "Choose 2 to 4 competencies from the fixed vocabulary and a minimum score between 55 and 85 for each.",
       "Only use competency keys from the vocabulary, exactly as spelled.",
       "Thresholds should be realistic for a junior hire in a small Ethiopian business, not aspirational.",
-      "Ethiopian SMEs often describe hiring problems in terms of trust, relationships, and informal coordination rather than formal job descriptions. Read between the lines: 'someone who can talk to suppliers' maps to customer_comms; 'keeps things straight' maps to task_accuracy and data_tools. Treat these as real signals.",
     ].join(" "),
     prompt: [
       `Fixed competency vocabulary:\n${vocabulary}`,

@@ -33,54 +33,8 @@ const PILLARS = [
 
 const STATS = [
   { value: "82/100", label: "Graded, not self-reported" },
-  { value: "2", label: "Languages — Amharic and English" },
+  { value: "2", label: "Languages, Amharic and English" },
   { value: "0", label: "Résumés required" },
-];
-
-const SME_HOOKS = [
-  {
-    icon: "⚡",
-    title: "Free AI Readiness Snapshot",
-    description:
-      "5 questions. Instant report showing which tasks an AI-fluent hire could take off your plate this month — no account needed.",
-    href: "/readiness",
-    cta: "Get your snapshot →",
-  },
-  {
-    icon: "🔔",
-    title: "Role Skill Templates",
-    description:
-      "Set the bar once. Every candidate who clears your thresholds appears automatically — no re-posting, no inbox pile.",
-    href: "/signup",
-    cta: "Start hiring →",
-  },
-  {
-    icon: "📋",
-    title: "Free Continuity Brief on Resignation",
-    description:
-      "Someone just quit? Capture their knowledge in a 10-minute AI interview, free. The natural next step is finding their replacement.",
-    href: "/signup",
-    cta: "Capture knowledge →",
-  },
-];
-
-const TRUST_POINTS = [
-  {
-    title: "Scores, not self-reports",
-    body: "Every number on a candidate's profile comes from a graded work simulation, not a checkbox they ticked.",
-  },
-  {
-    title: "Opt-in matching",
-    body: "A candidate enters the talent pool only when they toggle on discoverability. No passive surveillance.",
-  },
-  {
-    title: "Derived data only",
-    body: "Companies see match scores and gap analysis. Raw conversation transcripts and skill matrices stay private to the candidate.",
-  },
-  {
-    title: "Row Level Security",
-    body: "Access rules are enforced at the database layer, not just hidden behind the UI — so they hold even if application logic changes.",
-  },
 ];
 
 export default async function Home() {
@@ -94,33 +48,22 @@ export default async function Home() {
             Skill<span className="text-primary">·</span>Connect{" "}
             <span className="font-normal text-muted-foreground">Ethiopia</span>
           </span>
-          <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="hidden sm:inline-flex"
-              render={<Link href="/readiness" />}
-            >
-              Free SME Snapshot
-            </Button>
-            <Button
-              size="sm"
-              variant={profile ? "default" : "outline"}
-              render={
-                <Link
-                  href={profile ? homePathForRole(profile.role) : "/login"}
-                />
-              }
-            >
-              {profile ? "Dashboard" : "Sign in"}
-            </Button>
-          </div>
+          <Button
+            size="lg"
+            className="h-10 px-5"
+            variant={profile ? "default" : "outline"}
+            render={
+              <Link href={profile ? homePathForRole(profile.role) : "/login"} />
+            }
+          >
+            {profile ? "Go to dashboard" : "Sign in"}
+          </Button>
         </div>
       </header>
 
       <main>
-        {/* ── Hero ── */}
         <section className="relative overflow-hidden border-b">
+          {/* Soft radial wash so the hero does not read as a blank document. */}
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,var(--accent),transparent_60%)] opacity-70"
@@ -155,9 +98,9 @@ export default async function Home() {
                 size="lg"
                 variant="outline"
                 className="h-12 px-7 text-base"
-                render={<Link href="/readiness" />}
+                render={<Link href="/login" />}
               >
-                Free SME snapshot
+                I already have an account
               </Button>
             </div>
 
@@ -176,9 +119,8 @@ export default async function Home() {
           </div>
         </section>
 
-        {/* ── How it works ── */}
         <section className="mx-auto max-w-6xl px-6 py-20">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+          <h2 className="text-sm font-medium tracking-wide text-muted-foreground uppercase">
             How it works
           </h2>
 
@@ -194,114 +136,37 @@ export default async function Home() {
                 <h3 className="mt-3 text-lg font-semibold tracking-tight">
                   {pillar.title}
                 </h3>
-                <p className="mt-2 text-muted-foreground">{pillar.description}</p>
+                <p className="mt-2 text-muted-foreground">
+                  {pillar.description}
+                </p>
               </div>
             ))}
           </div>
         </section>
 
-        {/* ── SME free hooks ── */}
-        <section className="border-y bg-secondary/40">
-          <div className="mx-auto max-w-6xl px-6 py-20">
-            <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-              For companies
-            </h2>
-            <p className="mt-2 max-w-2xl text-2xl font-semibold tracking-tight text-balance">
-              Start free. Pay only when you hire verified talent.
-            </p>
-
-            <div className="mt-10 grid gap-6 sm:grid-cols-3">
-              {SME_HOOKS.map((hook) => (
-                <div
-                  key={hook.title}
-                  className="flex flex-col gap-3 rounded-xl border bg-card p-6"
-                >
-                  <span className="text-2xl" aria-hidden>
-                    {hook.icon}
-                  </span>
-                  <h3 className="font-semibold tracking-tight">{hook.title}</h3>
-                  <p className="flex-1 text-sm text-muted-foreground">
-                    {hook.description}
-                  </p>
-                  <Link
-                    href={hook.href}
-                    className="text-sm font-medium text-primary hover:underline"
-                  >
-                    {hook.cta}
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Trust & security ── */}
-        <section className="mx-auto max-w-6xl px-6 py-20">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Privacy and security
-          </h2>
-          <p className="mt-2 max-w-2xl text-2xl font-semibold tracking-tight text-balance">
-            The matching mechanism is powerful because it has real boundaries.
-          </p>
-
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {TRUST_POINTS.map((point) => (
-              <div key={point.title} className="space-y-2">
-                <h3 className="font-semibold tracking-tight">{point.title}</h3>
-                <p className="text-sm text-muted-foreground">{point.body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── CTA ── */}
         <section className="border-t bg-secondary/40">
           <div className="mx-auto max-w-6xl px-6 py-20 text-center">
             <h2 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-              Built for Ethiopia&rsquo;s SMEs and youth — on Telebirr, in Amharic,
-              scored not guessed.
+              Built for Ethiopia&rsquo;s SMEs and youth — scored, not guessed.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
               Free for job seekers, always. Companies start with a free AI
               Readiness Snapshot before they ever pay for a match.
             </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Button
-                size="lg"
-                className="h-12 px-7 text-base"
-                render={<Link href="/signup" />}
-              >
-                Create your account
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 px-7 text-base"
-                render={<Link href="/readiness" />}
-              >
-                Free SME snapshot
-              </Button>
-            </div>
+            <Button
+              size="lg"
+              className="mt-8 h-12 px-7 text-base"
+              render={<Link href="/signup" />}
+            >
+              Create your account
+            </Button>
           </div>
         </section>
       </main>
 
       <footer className="border-t">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-8 text-sm text-muted-foreground">
-          <span>
-            Skill-Connect Ethiopia — Cursor AI Hackathon Ethiopia, Addis Ababa.
-          </span>
-          <div className="flex gap-4">
-            <Link href="/readiness" className="hover:text-foreground">
-              Free SME Snapshot
-            </Link>
-            <Link href="/login" className="hover:text-foreground">
-              Sign in
-            </Link>
-            <Link href="/signup" className="hover:text-foreground">
-              Sign up
-            </Link>
-          </div>
+        <div className="mx-auto max-w-6xl px-6 py-8 text-sm text-muted-foreground">
+          Skill-Connect Ethiopia — Cursor AI Hackathon Ethiopia, Addis Ababa.
         </div>
       </footer>
     </div>

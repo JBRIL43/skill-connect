@@ -25,19 +25,6 @@ export async function promoteAction(
     };
   }
 
-  // Refuse the well-known placeholder values shipped in .env.example so a
-  // deployment that forgot to rotate the secret cannot be trivially escalated.
-  const UNSAFE_DEFAULTS = new Set([
-    "change-me-before-demo",
-    "REPLACE-WITH-A-STRONG-RANDOM-SECRET",
-  ]);
-  if (UNSAFE_DEFAULTS.has(expected)) {
-    return {
-      error:
-        "Promotion is disabled until ADMIN_INVITE_CODE is set to a project-specific value.",
-    };
-  }
-
   const code = String(formData.get("code") ?? "").trim();
   if (code !== expected) {
     return { error: "That invite code is not valid." };

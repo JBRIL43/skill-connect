@@ -44,19 +44,12 @@ function Button({
   className,
   variant = "default",
   size = "default",
-  render,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
-      // When a custom element is rendered (e.g. Next.js Link), the root is no
-      // longer a <button>, so native button semantics don't apply. Setting
-      // nativeButton={false} silences the Base UI warning and is the correct
-      // semantic choice — the rendered element provides its own role.
-      nativeButton={render === undefined}
-      render={render}
       {...props}
     />
   )

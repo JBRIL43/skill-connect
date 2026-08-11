@@ -1,46 +1,19 @@
-"use client";
-
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
-
-import { markAllNotificationsSeenAction } from "@/app/matcher/mark-seen-action";
 
 /**
  * The count is what makes the Pillar 3 demo beat land: a candidate finishes a
  * challenge on one screen and this number moves on the other.
- *
- * Clicking the bell navigates to the full notifications list AND pre-marks
- * everything seen so the count resets immediately in the UI rather than waiting
- * for a round-trip. The list page marks them seen again on load as a
- * belt-and-suspenders guarantee.
  */
 export function NotificationBell({ unseen }: { unseen: number }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-
-  function handleClick(event: React.MouseEvent) {
-    if (unseen === 0) return; // nothing to mark — let the link navigate normally
-
-    event.preventDefault();
-
-    startTransition(async () => {
-      await markAllNotificationsSeenAction();
-      router.push("/matcher/notifications");
-      router.refresh();
-    });
-  }
-
   return (
     <Link
       href="/matcher/notifications"
-      onClick={handleClick}
       aria-label={
         unseen === 0
           ? "Notifications"
           : `Notifications, ${unseen} unread candidate${unseen === 1 ? "" : "s"}`
       }
-      className={`relative inline-flex size-9 items-center justify-center rounded-lg border border-ink-600 text-slate-300 transition-colors hover:border-verdant-500/40 hover:text-slate-100 ${pending ? "opacity-60" : ""}`}
+      className="relative inline-flex size-9 items-center justify-center rounded-lg border border-ink-600 text-slate-300 transition-colors hover:border-verdant-500/40 hover:text-slate-100"
     >
       <svg
         viewBox="0 0 24 24"

@@ -52,12 +52,9 @@ export default async function PostingMatchesPage({
     ? await repo().getTemplate(posting.template_id)
     : null;
 
-  const [matches, brief, briefStatus] = await Promise.all([
+  const [matches, brief] = await Promise.all([
     repo().listMatchesForPosting(posting.id),
     repo().getBriefByPosting(posting.id),
-    // Two booleans, no content: enough to offer the interview without this page
-    // ever holding text the employee has not approved.
-    repo().getBriefStatus(posting.id),
   ]);
 
   const thresholds = Object.entries(template?.thresholds_json ?? {});
@@ -132,37 +129,6 @@ export default async function PostingMatchesPage({
                 postingId={posting.id}
                 existingNodeId={brief.custom_node_id}
               />
-            </CardContent>
-          </Card>
-        ) : posting.is_transition_role ? (
-          <Card className="panel">
-            <CardHeader>
-              <CardTitle>
-                {briefStatus.exists
-                  ? "The handover is waiting on the employee"
-                  : "Capture what the person leaving knows"}
-              </CardTitle>
-              <CardDescription>
-                {briefStatus.exists
-                  ? "An interview has been recorded, but the brief has not been approved for sharing yet. It stays hidden here until it is."
-                  : "Someone is leaving this role and taking the undocumented half of it with them. A short interview turns that into a brief, and the brief into a challenge that scores replacements on the real job."}
-              </CardDescription>
-              <CardAction>
-                <Badge className={briefStatus.exists ? TONE.award : TONE.neutral}>
-                  {briefStatus.exists ? "Awaiting approval" : "Not started"}
-                </Badge>
-              </CardAction>
-            </CardHeader>
-
-            <CardContent>
-              <Link
-                href={`/handover/${posting.id}`}
-                className="text-sm text-verdant-400 hover:text-verdant-300"
-              >
-                {briefStatus.exists
-                  ? "Reopen the handover interview →"
-                  : "Start the handover interview →"}
-              </Link>
             </CardContent>
           </Card>
         ) : null}

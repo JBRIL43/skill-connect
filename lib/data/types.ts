@@ -1,4 +1,3 @@
-import type { TranscriptInterview } from "@/lib/handover/normalize";
 import type { CompetencyKey } from "@/lib/sandbox/competencies";
 import type {
   ContinuityBrief as DbContinuityBrief,
@@ -45,10 +44,7 @@ export type RoleSkillTemplate = Omit<DbRoleSkillTemplate, "thresholds_json"> & {
   thresholds_json: ScoreMap;
 };
 
-/**
- * The structured answers challenge generation reads. Never read unless
- * reviewed_by_employee is true.
- */
+/** Dev 2 owns this shape. Never read unless reviewed_by_employee is true. */
 export type RawInterview = {
   role_title?: string;
   recurring_tasks?: string[];
@@ -58,15 +54,8 @@ export type RawInterview = {
   notes?: string;
 };
 
-/**
- * Deliberately wider than RawInterview. Two handover flows write this column
- * and only one writes the shape above; typing it as RawInterview alone reads
- * as a guarantee that does not hold. Go through normalizeInterview.
- */
-export type StoredInterview = RawInterview | TranscriptInterview;
-
 export type ContinuityBrief = Omit<DbContinuityBrief, "raw_interview_json"> & {
-  raw_interview_json: StoredInterview | null;
+  raw_interview_json: RawInterview | null;
 };
 
 /**

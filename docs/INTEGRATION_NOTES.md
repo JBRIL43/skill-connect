@@ -133,6 +133,54 @@ logs. The live database and both seed files are now on the frozen list, and
 `skills_json` on the skill matrix is a separate, free-form thing. Nothing in
 matching reads it.
 
+## Everyone: what to say about payments in the pitch
+
+Section 14 asks us to be explicit about what is real, so here is the honest
+split, and it is a good story either way.
+
+**Real:** the whole Telebirr C2B integration is written against Ethio Telecom's
+own C2B Web Checkout guide, not a community package -- fabric token, signed
+`preOrder`, the signed paygate redirect, `queryOrder` confirmation and the
+`notify_url` webhook. The request signing is verified offline against the worked
+example in their documentation (`npm run test:sign`). That is the file to open if
+an Ethio Telecom representative asks to see the integration, which Section 14
+says they will.
+
+**Mocked, at the time of writing:** which rail actually runs on stage.
+`PAYMENTS_PROVIDER` is on `mock`, because the private key issued by the portal
+arrived truncated and no live call can be signed until it is reissued. The mock
+is a Telebirr-styled checkout on our own origin, clearly labelled "Demo" on the
+screen, and it writes the same `payments` row with `provider = 'mock'`.
+
+Worth saying plainly rather than glossing: the integration is written and tested,
+and it is one environment variable away from live. Do not claim money moved.
+
+## Dev 3: two things premium touches
+
+Both are one-liners on your side; the helpers are built and tested.
+
+**Auto-notify is already gated, and you do not need to do anything.** A free SME
+gets `notify_on_match` on one template, premium gets unlimited. It is enforced
+inside `/api/notifications/check`, so the contract you call is unchanged and your
+template editor can keep letting people tick the box. If you want to show the
+limit in the UI, `canEnableNotify(smeId)` from `lib/payments/premium.ts` answers
+"may they turn on one more".
+
+**Priority handover is yours to place.** Section 6 sells it alongside auto-notify
+and the payments side is ready, but the handover queue is on your branch, so I
+have not reached into it. When you order continuity briefs, put premium companies
+first:
+
+```ts
+import { premiumSmeIds } from "@/lib/payments/premium";
+
+const premium = await premiumSmeIds(briefs.map((b) => b.sme_id));
+briefs.sort((a, b) => Number(premium.has(b.sme_id)) - Number(premium.has(a.sme_id)));
+```
+
+`premiumSmeIds` is one query for the whole list rather than one per row. There is
+also `isPremium(smeId)` for a single check.
+
 ## Dev 1: public `/handover` prefix + signing secret (Dev 2 Phase 6)
 
 Outgoing employees may not have Skill-Connect accounts. The employee interview
@@ -168,6 +216,7 @@ Source of truth: `lib/ai/handover.ts` (`rawInterviewJsonSchema`).
 
 Only consume rows where `reviewed_by_employee = true`. Never read unreviewed
 briefs, and never expose `raw_interview_json` to SME UI.
+
 ## Everyone: the full three-way merge builds and passes
 
 > Added by Dev 3, from a throwaway branch that merged `d2/ai-coach` onto
@@ -284,189 +333,3 @@ npx vercel --prod
 
 The redeploy is not optional. `NEXT_PUBLIC_*` variables are inlined at build
 time, so adding one without rebuilding changes nothing.
-
-## Dev 2: Phase 6 is built, and it is sitting in your lane
-
-Phases 1 through 5 are done and good. Phase 6 — the handover interview — was
-not started: `lib/ai/prompts.ts` has the `handover` variant and `/api/ai/chat`
-accepts `mode: "handover"`, but nothing connected either to a posting, wrote
-`continuity_briefs`, produced a `generated_brief`, or flipped
-`reviewed_by_employee`. Master checklist line 518 needs both halves and only
-mine existed; I had been building against a brief hand-seeded through
-`scripts/seed-continuity-brief.sql`, which is not a thing that can be demoed.
-
-So it is built, in `app/handover/**` and `lib/handover/**` — deliberately not
-in `app/coach/**` or `app/chatbot/**`, so nothing you are pushing collides with
-it. What landed:
-
-- `lib/handover/interview.ts` — a six-question script that maps one-to-one onto
-  `RawInterview`, plus `composeBriefLocally`, which assembles the brief prose
-  from the answers.
-- `lib/handover/compose.ts` — `composeBrief`, which calls the model when
-  `isLiveAI()` and falls back to the local composer when there is no key or the
-  call fails. Kept in its own file so the client form can import the questions
-  without pulling the AI SDK into the browser bundle; wiring it back into
-  `interview.ts` costs 148 kB on that route, which is how it was found.
-- `app/handover/[postingId]` — interview, generated brief, redact, approve.
-- `saveBriefDraft` / `setBriefReviewed` / `getBriefDraft` / `getBriefStatus` on
-  both adapters.
-
-**It is deterministic, and that is a choice, not a shortcut.** The same
-reasoning as `AI_MODE=stub` in the sandbox grader: this has to work at a venue
-with no network on a laptop with no key. The answers are real, the row is real,
-and a scripted run and a model-driven run produce an identical
-`raw_interview_json`.
-
-**Swapping in your streaming interview should be a small change.** Your
-`handover` prompt already asks for the same five things. The seam is
-`toRawInterview(answers)` in `lib/handover/interview.ts`: produce a
-`RawInterview` from your transcript instead of from the form, hand it to
-`saveBriefDraft`, and every downstream piece — the redaction gate, challenge
-generation, the node tree, grading — works unchanged. Please do not move the
-approval step while you are in there. `setBriefReviewed` is the only thing
-standing between an unredacted client name and a candidate's screen, and
-`lib/data/supabase/adapter.ts` reads past the brief policy on the strength of
-it.
-
-`npm run verify:mock` covers the chain end to end, 46 checks, including that an
-unapproved brief stays off the employer's page and that editing an approved one
-sends it back behind the gate.
-
-> Superseded in part, an hour later, by `f992fd3`. Dev 2 shipped Phase 6 in the
-> same window. Both survived the merge; see the next section for how.
-
-## Dev 2 + Dev 3: we both built Phase 6, and the shapes did not match
-
-`f992fd3` and `788cb2f` landed within the hour, both implementing the handover
-interview, neither aware of the other. Both are in `main`. Nothing was thrown
-away, but two things had to be reconciled and one of them was a real bug.
-
-### The route now has two doors
-
-`/handover/[postingId]` dispatches on the token:
-
-| URL | Whose | Who it is for | Needs |
-| --- | --- | --- | --- |
-| `?token=...` | Dev 2 | the departing employee, who has no account | `HANDOVER_SIGNING_SECRET`, `OPENAI_API_KEY` |
-| no token | Dev 3 | the owning SME, handing over their screen | nothing |
-
-Dev 2's is the better answer to Section 9 — an expiring HMAC link is what an
-employee without an account actually needs, and I had explicitly scoped that
-out. Dev 3's runs with no key, no secret and no network, which is what the demo
-has to survive. Keeping both costs one `if` and loses nothing. The SME's screen
-links to `/handover/invite` for anyone who would rather send the link.
-
-### The bug: two `raw_interview_json` shapes, failing silently
-
-Both sides documented their shape as the frozen Dev 3 contract, in
-`lib/ai/handover.ts` and in `lib/data/types.ts`, and they are different:
-
-```jsonc
-// Dev 2 writes the transcript
-{ "version": 1, "locale": "en", "completed_at": "...", "messages": [ ... ] }
-
-// Dev 3's challenge generator reads structured answers
-{ "role_title": "...", "recurring_tasks": [ ... ], "tools": [ ... ] }
-```
-
-Feed the transcript to `lib/ai/challenge-gen.ts` and nothing throws. There is no
-`role_title`, so the challenge is called "Transition role"; there are no
-`recurring_tasks`, so the scenario is the generic fallback. It renders, it
-grades, it looks fine — and Pillar 3b's entire premise, scoring a replacement on
-the actual job, has quietly stopped happening. That is a worse failure than a
-crash, because nothing surfaces it.
-
-`lib/handover/normalize.ts` now reads both. For the transcript shape it
-reconstructs the structured fields from the approved markdown brief, whose
-headings (`## Recurring tasks`, `## Tools and systems`, `## Coordination`) are
-exactly where Dev 2's structure went — and which has the advantage of being the
-reviewed text rather than the raw transcript. `npm run check:interview` asserts
-both shapes produce a challenge that quotes the real work.
-
-`ContinuityBrief.raw_interview_json` is typed `StoredInterview` rather than
-`RawInterview`, because typing it as one shape when two are written is how this
-comes back.
-
-## Dev 2: the coach works without an API key now
-
-The audit line above ("the coach throws when no LLM key is set") was still true
-at `f992fd3`, just relocated into `getAiModel()` in `lib/ai/model.ts`. The
-consequence for a job seeker: `/coach` renders perfectly, and then returns 503
-on the first message they send. The page looks healthy right up until somebody
-uses it, which is the worst place to discover it — and no key is the state this
-repo is actually in.
-
-`lib/ai/stub-coach.ts` is the same bargain the sandbox grader already makes
-under `AI_MODE=stub`: a fixed question ladder, and a skill matrix read out of
-the transcript by keyword signal in both scripts. It does not pretend to be a
-language model. It asks real questions in order and derives numbers a candidate
-can trace back to a sentence they typed, which beats a 503 and beats invented
-scores. Recommendations rank the real catalog by weakest mapped competency and
-go through `isSandboxNodeId`, so a stub recommendation cannot deep-link to a
-challenge that does not exist.
-
-`hasLiveAiKey()` gates it: a key alone is enough to go live, and `AI_MODE=stub`
-forces deterministic even with one. All three routes branch on it; the live path
-is untouched.
-
-Two other changes in your lane, both needed to make that reachable:
-
-- **`/api/ai/skills` writes through `repo().saveSkillMatrix()`** instead of
-  inserting into Supabase directly. It was returning `TypeError: fetch failed`
-  in mock mode. Going through the seam also means the matcher reads the coach's
-  output from the same place in both modes.
-- **`getSessionProfile()` resolves a fixture profile when
-  `NEXT_PUBLIC_DATA_SOURCE=mock`.** Every page behind it, including `/coach`,
-  used to redirect to a login that cannot succeed offline. It needs the literal
-  string `mock`, so in any configuration that can reach real data it never runs.
-
-`npm run verify:coach` is 20 checks: a seeker holds the conversation, gets a
-skill map that varies with what they said, an employer is refused, and every
-recommended challenge opens.
-## Everyone: what to say about payments in the pitch
-
-Section 14 asks us to be explicit about what is real, so here is the honest
-split, and it is a good story either way.
-
-**Real:** the whole Telebirr C2B integration is written against Ethio Telecom's
-own C2B Web Checkout guide, not a community package -- fabric token, signed
-`preOrder`, the signed paygate redirect, `queryOrder` confirmation and the
-`notify_url` webhook. The request signing is verified offline against the worked
-example in their documentation (`npm run test:sign`). That is the file to open if
-an Ethio Telecom representative asks to see the integration, which Section 14
-says they will.
-
-**Mocked, at the time of writing:** which rail actually runs on stage.
-`PAYMENTS_PROVIDER` is on `mock`, because the private key issued by the portal
-arrived truncated and no live call can be signed until it is reissued. The mock
-is a Telebirr-styled checkout on our own origin, clearly labelled "Demo" on the
-screen, and it writes the same `payments` row with `provider = 'mock'`.
-
-Worth saying plainly rather than glossing: the integration is written and tested,
-and it is one environment variable away from live. Do not claim money moved.
-
-## Dev 3: two things premium touches
-
-Both are one-liners on your side; the helpers are built and tested.
-
-**Auto-notify is already gated, and you do not need to do anything.** A free SME
-gets `notify_on_match` on one template, premium gets unlimited. It is enforced
-inside `/api/notifications/check`, so the contract you call is unchanged and your
-template editor can keep letting people tick the box. If you want to show the
-limit in the UI, `canEnableNotify(smeId)` from `lib/payments/premium.ts` answers
-"may they turn on one more".
-
-**Priority handover is yours to place.** Section 6 sells it alongside auto-notify
-and the payments side is ready, but the handover queue is on your branch, so I
-have not reached into it. When you order continuity briefs, put premium companies
-first:
-
-```ts
-import { premiumSmeIds } from "@/lib/payments/premium";
-
-const premium = await premiumSmeIds(briefs.map((b) => b.sme_id));
-briefs.sort((a, b) => Number(premium.has(b.sme_id)) - Number(premium.has(a.sme_id)));
-```
-
-`premiumSmeIds` is one query for the whole list rather than one per row. There is
-also `isPremium(smeId)` for a single check.

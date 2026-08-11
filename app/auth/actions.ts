@@ -12,14 +12,6 @@ export type AuthState = {
   notice?: string;
 };
 
-/**
- * In mock mode there is no Supabase project to authenticate against.
- * Redirect to /demo, which is the mock-mode identity selector.
- */
-function isMock() {
-  return process.env.NEXT_PUBLIC_DATA_SOURCE === "mock";
-}
-
 function readString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -46,8 +38,6 @@ export async function signUpAction(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  if (isMock()) redirect("/demo");
-
   const email = readString(formData, "email");
   const password = readString(formData, "password");
   const fullName = readString(formData, "full_name");
@@ -105,8 +95,6 @@ export async function signInAction(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  if (isMock()) redirect("/demo");
-
   const email = readString(formData, "email");
   const password = readString(formData, "password");
   const next = readString(formData, "next");

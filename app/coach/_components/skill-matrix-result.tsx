@@ -84,18 +84,9 @@ export function SkillMatrixResult({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
-            <span className="text-muted-foreground">Overall readiness</span>
-            <span className="ml-auto font-semibold tabular-nums text-primary">
-              {readinessScore}
-              <span className="text-muted-foreground font-normal">/100</span>
-            </span>
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${readinessScore}%` }}
-              />
-            </div>
+          <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+            Placeholder readiness score:{" "}
+            <span className="font-medium tabular-nums">{readinessScore}</span>
           </div>
 
           <div className="rounded-xl border bg-background p-4">

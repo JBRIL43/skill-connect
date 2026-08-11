@@ -469,6 +469,78 @@ export const supabaseRepository: DataRepository = {
     if (error) throw new Error(error.message);
   },
 
+  async getBriefStatus(postingId) {
+    const row = unwrap<{ reviewed_by_employee: boolean }>(
+      await elevated()
+        .from("continuity_briefs")
+        .select("reviewed_by_employee")
+        .eq("posting_id", postingId)
+        .maybeSingle(),
+    );
+
+    return { exists: Boolean(row), reviewed: Boolean(row?.reviewed_by_employee) };
+  },
+
+  // Reads pre-redaction content. Only the redaction screen may call this, and
+  // only after checking the caller owns the posting — see the interface note.
+  async getBriefDraft(postingId) {
+    return unwrap<ContinuityBrief>(
+      await elevated()
+        .from("continuity_briefs")
+        .select("*")
+        .eq("posting_id", postingId)
+        .maybeSingle(),
+    );
+  },
+
+  // Elevated for the same reason as every other write here: the table has no
+  // write policy, and the outgoing employee is not necessarily an account.
+  async saveBriefDraft(input) {
+    const existing = unwrap<{ id: string }>(
+      await elevated()
+        .from("continuity_briefs")
+        .select("id")
+        .eq("posting_id", input.posting_id)
+        .maybeSingle(),
+    );
+
+    // reviewed_by_employee is forced false rather than left alone: an edit to
+    // an approved brief has not itself been approved.
+    const payload = {
+      posting_id: input.posting_id,
+      raw_interview_json: input.raw_interview_json,
+      generated_brief: input.generated_brief,
+      reviewed_by_employee: false,
+    };
+
+    const written = existing
+      ? await elevated()
+          .from("continuity_briefs")
+          .update(payload)
+          .eq("id", existing.id)
+          .select("*")
+          .single()
+      : await elevated()
+          .from("continuity_briefs")
+          .insert(payload)
+          .select("*")
+          .single();
+
+    if (written.error) throw new Error(written.error.message);
+    return written.data as ContinuityBrief;
+  },
+
+  async setBriefReviewed(postingId, reviewed, generatedBrief) {
+    const patch: Record<string, unknown> = { reviewed_by_employee: reviewed };
+    if (generatedBrief !== undefined) patch.generated_brief = generatedBrief;
+
+    const { error } = await elevated()
+      .from("continuity_briefs")
+      .update(patch)
+      .eq("posting_id", postingId);
+    if (error) throw new Error(error.message);
+  },
+
   async getBriefByPosting(postingId) {
     return unwrap<ContinuityBrief>(
       await (await db())

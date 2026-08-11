@@ -9,6 +9,7 @@ import type {
 } from "@/lib/data/repository";
 import type {
   Badge,
+  ContinuityBrief,
   GeneratedChallenge,
   Match,
   MatchStatus,
@@ -271,6 +272,57 @@ export const mockRepository: DataRepository = {
   async markNotificationSeen(notificationId) {
     const row = store().notifications.find((item) => item.id === notificationId);
     if (row) row.seen = true;
+  },
+
+  async getBriefStatus(postingId) {
+    const row = store().continuityBriefs.find(
+      (item) => item.posting_id === postingId,
+    );
+    return { exists: Boolean(row), reviewed: Boolean(row?.reviewed_by_employee) };
+  },
+
+  // Unfiltered on purpose, mirroring the supabase elevated read. Redaction
+  // screen only, and only behind an ownership check.
+  async getBriefDraft(postingId) {
+    return (
+      store().continuityBriefs.find((row) => row.posting_id === postingId) ??
+      null
+    );
+  },
+
+  // One brief per posting, so re-running the interview replaces the draft.
+  // Approval is revoked on every save: edited text has not been reviewed.
+  async saveBriefDraft(input) {
+    const rows = store().continuityBriefs;
+    const existing = rows.find((row) => row.posting_id === input.posting_id);
+
+    if (existing) {
+      existing.raw_interview_json = input.raw_interview_json;
+      existing.generated_brief = input.generated_brief;
+      existing.reviewed_by_employee = false;
+      return existing;
+    }
+
+    const created: ContinuityBrief = {
+      id: `brief-${input.posting_id}`,
+      posting_id: input.posting_id,
+      raw_interview_json: input.raw_interview_json,
+      generated_brief: input.generated_brief,
+      custom_node_id: null,
+      reviewed_by_employee: false,
+      created_at: new Date().toISOString(),
+    };
+    rows.push(created);
+    return created;
+  },
+
+  async setBriefReviewed(postingId, reviewed, generatedBrief) {
+    const row = store().continuityBriefs.find(
+      (item) => item.posting_id === postingId,
+    );
+    if (!row) return;
+    row.reviewed_by_employee = reviewed;
+    if (generatedBrief !== undefined) row.generated_brief = generatedBrief;
   },
 
   async getBriefByPosting(postingId) {

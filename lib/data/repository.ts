@@ -7,6 +7,7 @@ import type {
   MatchStatus,
   Notification,
   Profile,
+  RawInterview,
   Role,
   RoleSkillTemplate,
   SandboxMode,
@@ -49,6 +50,18 @@ export type CompanyProfilePatch = Partial<
     "company_name" | "industry" | "size" | "about" | "logo_url"
   >
 >;
+
+export type BriefDraftInput = {
+  posting_id: string;
+  raw_interview_json: RawInterview;
+  generated_brief: string;
+};
+
+/** Status without content, so a caller can branch without reading a brief. */
+export type BriefStatus = {
+  exists: boolean;
+  reviewed: boolean;
+};
 
 /**
  * The only surface Dev 3's routes and components are allowed to talk to.
@@ -128,6 +141,49 @@ export interface DataRepository {
     candidate_id: string;
   }): Promise<Notification | null>;
   markNotificationSeen(id: string): Promise<void>;
+
+  /**
+   * Whether a posting has a brief at all, and whether it has been approved.
+   * Two booleans and nothing else, so the posting page can offer to start or
+   * resume an interview without acquiring a read onto unreviewed content.
+   */
+  getBriefStatus(postingId: string): Promise<BriefStatus>;
+
+  /**
+   * The brief regardless of review state, for the redaction screen alone.
+   *
+   * 0002 makes an unreviewed brief invisible to everyone, the owning SME
+   * included, because it may still name clients. The redaction UI is the one
+   * place that cannot honour that and still function: somebody has to read the
+   * unredacted text in order to redact it. 0002's own comment allows for this —
+   * "the review step runs through a server route using the service role".
+   *
+   * Every other read stays reviewed-only. Callers must gate on posting
+   * ownership themselves, since the service role will not do it for them.
+   */
+  getBriefDraft(postingId: string): Promise<ContinuityBrief | null>;
+
+  /**
+   * Writes the interview and its derived prose. Re-running the interview
+   * overwrites the draft rather than stacking rows, since the brief is
+   * one-per-posting.
+   *
+   * Always leaves the brief unapproved, including when it was approved a moment
+   * ago. Approval is the redaction gate, so it can only ever be an explicit act
+   * on text somebody has read — otherwise an edit after approval would ship
+   * unreviewed prose under an approved flag.
+   */
+  saveBriefDraft(input: BriefDraftInput): Promise<ContinuityBrief>;
+
+  /**
+   * The redaction gate. `generated_brief` carries the employee's edits, so the
+   * text that becomes visible is the text they actually approved.
+   */
+  setBriefReviewed(
+    postingId: string,
+    reviewed: boolean,
+    generatedBrief?: string,
+  ): Promise<void>;
 
   /**
    * Reviewed briefs only. An unreviewed brief is not returned in a partial or

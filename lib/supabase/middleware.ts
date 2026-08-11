@@ -10,6 +10,16 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/company-profile",
   "/readiness",
+  // Telebirr POSTs here from their own servers with no session. Without this it
+  // would be redirected to /login, and a 307 is indistinguishable from success
+  // at their end -- the payment would simply never be recorded. The route
+  // authenticates the notification by asking the gateway about the order rather
+  // than by trusting the caller.
+  "/api/payments/telebirr/notify",
+  // Token-gated outgoing-employee interview (Dev 2 Phase 6). Auth is enforced
+  // by HANDOVER_SIGNING_SECRET HMAC, not Supabase session. See
+  // docs/INTEGRATION_NOTES.md.
+  "/handover",
 ];
 
 function isPublic(pathname: string) {

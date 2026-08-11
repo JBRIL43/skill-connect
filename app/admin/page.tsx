@@ -51,7 +51,7 @@ async function loadCounters() {
   const admin = createAdminClient();
   const head = { count: "exact" as const, head: true };
 
-  const [jobSeekers, smes, postings, matches, transitionRoles] =
+  const [jobSeekers, smes, postings, matches, transitionRoles, upgrades] =
     await Promise.all([
       admin.from("profiles").select("*", head).eq("role", "job_seeker"),
       admin.from("profiles").select("*", head).eq("role", "sme"),
@@ -61,6 +61,10 @@ async function loadCounters() {
         .from("sme_postings")
         .select("*", head)
         .eq("is_transition_role", true),
+      // Section 13's demo ends on this number moving: the SME upgrades, then the
+      // console is refreshed to show it. Paid only - a pending row is an
+      // abandoned checkout, not revenue.
+      admin.from("payments").select("*", head).eq("status", "paid"),
     ]);
 
   return {
@@ -69,6 +73,7 @@ async function loadCounters() {
     postings: postings.count ?? 0,
     matches: matches.count ?? 0,
     transitionRoles: transitionRoles.count ?? 0,
+    upgrades: upgrades.count ?? 0,
   };
 }
 
@@ -150,6 +155,7 @@ export default async function AdminPage({
     { label: "Postings", value: counters.postings },
     { label: "Matches made", value: counters.matches },
     { label: "Transition roles", value: counters.transitionRoles },
+    { label: "Premium upgrades", value: counters.upgrades },
   ];
 
   return (

@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
+  // `next build` and `next dev` both write to .next, and running one while the
+  // other is up corrupts it. Setting NEXT_DIST_DIR lets a build run beside the
+  // dev server instead of taking it down first.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
 };
 
 export default nextConfig;

@@ -1,0 +1,24 @@
+---
+inclusion: fileMatch
+fileMatchPattern: ['supabase/**']
+---
+
+# Schema files are Dev 1's alone
+
+Only Dev 1 edits anything under `supabase/`. This prevents migration conflicts,
+which are the ugliest merge conflicts to untangle late in a 48-hour build.
+
+If this session is Dev 2 or Dev 3 and you need a new column or table:
+
+- STOP. Do not write or edit a migration.
+- Tell the user to send Dev 1 the requirement in plain language (what data, on which
+  table, and why), and continue with the rest of your task in the meantime.
+
+If this session is Dev 1:
+
+- Follow Section 8 of `/docs/PROJECT_DOCS.md` exactly. Flat tables, no extra
+  normalization tables under time pressure.
+- After pushing a migration, confirm every table is visible and correctly typed in
+  Supabase Studio, then announce it to the team channel.
+- Enable RLS on a table in the same migration that creates it. A table with RLS on
+  and zero policies is deny-all, which is the safe default while policies are built.

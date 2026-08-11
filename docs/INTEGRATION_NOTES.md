@@ -133,6 +133,90 @@ logs. The live database and both seed files are now on the frozen list, and
 `skills_json` on the skill matrix is a separate, free-form thing. Nothing in
 matching reads it.
 
+## Everyone: what to say about payments in the pitch
+
+Section 14 asks us to be explicit about what is real, so here is the honest
+split, and it is a good story either way.
+
+**Real:** the whole Telebirr C2B integration is written against Ethio Telecom's
+own C2B Web Checkout guide, not a community package -- fabric token, signed
+`preOrder`, the signed paygate redirect, `queryOrder` confirmation and the
+`notify_url` webhook. The request signing is verified offline against the worked
+example in their documentation (`npm run test:sign`). That is the file to open if
+an Ethio Telecom representative asks to see the integration, which Section 14
+says they will.
+
+**Mocked, at the time of writing:** which rail actually runs on stage.
+`PAYMENTS_PROVIDER` is on `mock`, because the private key issued by the portal
+arrived truncated and no live call can be signed until it is reissued. The mock
+is a Telebirr-styled checkout on our own origin, clearly labelled "Demo" on the
+screen, and it writes the same `payments` row with `provider = 'mock'`.
+
+Worth saying plainly rather than glossing: the integration is written and tested,
+and it is one environment variable away from live. Do not claim money moved.
+
+## Dev 3: two things premium touches
+
+Both are one-liners on your side; the helpers are built and tested.
+
+**Auto-notify is already gated, and you do not need to do anything.** A free SME
+gets `notify_on_match` on one template, premium gets unlimited. It is enforced
+inside `/api/notifications/check`, so the contract you call is unchanged and your
+template editor can keep letting people tick the box. If you want to show the
+limit in the UI, `canEnableNotify(smeId)` from `lib/payments/premium.ts` answers
+"may they turn on one more".
+
+**Priority handover is yours to place.** Section 6 sells it alongside auto-notify
+and the payments side is ready, but the handover queue is on your branch, so I
+have not reached into it. When you order continuity briefs, put premium companies
+first:
+
+```ts
+import { premiumSmeIds } from "@/lib/payments/premium";
+
+const premium = await premiumSmeIds(briefs.map((b) => b.sme_id));
+briefs.sort((a, b) => Number(premium.has(b.sme_id)) - Number(premium.has(a.sme_id)));
+```
+
+`premiumSmeIds` is one query for the whole list rather than one per row. There is
+also `isPremium(smeId)` for a single check.
+
+## Dev 1: public `/handover` prefix + signing secret (Dev 2 Phase 6)
+
+Outgoing employees may not have Skill-Connect accounts. The employee interview
+lives at `/handover/[postingId]?token=...` and is gated by an expiring HMAC
+token, not by Supabase Auth.
+
+Dev 1 needs:
+
+1. Add `"/handover"` to `PUBLIC_PREFIXES` in `lib/supabase/middleware.ts`.
+2. Document `HANDOVER_SIGNING_SECRET` in `.env.example` (server-only, min 16
+   characters). Dev 2 generates invite links with it.
+3. Confirm continuity brief writes stay on the service-role server path already
+   described in `docs/RLS_MODEL.md` (no client RLS write policy).
+
+Applied on `d2/ai-coach` so Phase 6 is demoable; please review/own the
+middleware and env-doc lines in the eventual merge.
+
+## Dev 3: frozen `raw_interview_json` shape (Dev 2 Phase 6)
+
+Source of truth: `lib/ai/handover.ts` (`rawInterviewJsonSchema`).
+
+```json
+{
+  "version": 1,
+  "locale": "en",
+  "completed_at": "2026-07-26T00:00:00.000Z",
+  "messages": [
+    { "role": "assistant", "content": "..." },
+    { "role": "user", "content": "..." }
+  ]
+}
+```
+
+Only consume rows where `reviewed_by_employee = true`. Never read unreviewed
+briefs, and never expose `raw_interview_json` to SME UI.
+
 ## Everyone: the full three-way merge builds and passes
 
 > Added by Dev 3, from a throwaway branch that merged `d2/ai-coach` onto
@@ -249,50 +333,3 @@ npx vercel --prod
 
 The redeploy is not optional. `NEXT_PUBLIC_*` variables are inlined at build
 time, so adding one without rebuilding changes nothing.
-
-## Dev 2: Phase 6 is built, and it is sitting in your lane
-
-Phases 1 through 5 are done and good. Phase 6 — the handover interview — was
-not started: `lib/ai/prompts.ts` has the `handover` variant and `/api/ai/chat`
-accepts `mode: "handover"`, but nothing connected either to a posting, wrote
-`continuity_briefs`, produced a `generated_brief`, or flipped
-`reviewed_by_employee`. Master checklist line 518 needs both halves and only
-mine existed; I had been building against a brief hand-seeded through
-`scripts/seed-continuity-brief.sql`, which is not a thing that can be demoed.
-
-So it is built, in `app/handover/**` and `lib/handover/**` — deliberately not
-in `app/coach/**` or `app/chatbot/**`, so nothing you are pushing collides with
-it. What landed:
-
-- `lib/handover/interview.ts` — a six-question script that maps one-to-one onto
-  `RawInterview`, plus `composeBriefLocally`, which assembles the brief prose
-  from the answers.
-- `lib/handover/compose.ts` — `composeBrief`, which calls the model when
-  `isLiveAI()` and falls back to the local composer when there is no key or the
-  call fails. Kept in its own file so the client form can import the questions
-  without pulling the AI SDK into the browser bundle; wiring it back into
-  `interview.ts` costs 148 kB on that route, which is how it was found.
-- `app/handover/[postingId]` — interview, generated brief, redact, approve.
-- `saveBriefDraft` / `setBriefReviewed` / `getBriefDraft` / `getBriefStatus` on
-  both adapters.
-
-**It is deterministic, and that is a choice, not a shortcut.** The same
-reasoning as `AI_MODE=stub` in the sandbox grader: this has to work at a venue
-with no network on a laptop with no key. The answers are real, the row is real,
-and a scripted run and a model-driven run produce an identical
-`raw_interview_json`.
-
-**Swapping in your streaming interview should be a small change.** Your
-`handover` prompt already asks for the same five things. The seam is
-`toRawInterview(answers)` in `lib/handover/interview.ts`: produce a
-`RawInterview` from your transcript instead of from the form, hand it to
-`saveBriefDraft`, and every downstream piece — the redaction gate, challenge
-generation, the node tree, grading — works unchanged. Please do not move the
-approval step while you are in there. `setBriefReviewed` is the only thing
-standing between an unredacted client name and a candidate's screen, and
-`lib/data/supabase/adapter.ts` reads past the brief policy on the strength of
-it.
-
-`npm run verify:mock` covers the chain end to end, 46 checks, including that an
-unapproved brief stays off the employer's page and that editing an approved one
-sends it back behind the gate.

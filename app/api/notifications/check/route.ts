@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { premiumSmeIds, templatesWithinPlan } from "@/lib/payments/premium";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
@@ -151,9 +152,18 @@ export async function POST(request: Request) {
   }
 
   const scores = latestScorePerCompetency(scoreRows ?? []);
-  const cleared = ((templates ?? []) as RoleSkillTemplate[]).filter((template) =>
-    clears(scores, template),
+
+  // Section 6 sells auto-notify as the premium add-on, and this is where
+  // notify_on_match actually does anything -- so this is where the plan is
+  // enforced. Doing it here rather than in the template editor means the gate
+  // holds even if a screen that has not heard of premium lets the flag be set.
+  const all = (templates ?? []) as RoleSkillTemplate[];
+  const entitled = templatesWithinPlan(
+    all,
+    await premiumSmeIds(all.map((template) => template.sme_id)),
   );
+
+  const cleared = entitled.filter((template) => clears(scores, template));
 
   if (cleared.length === 0) {
     return NextResponse.json(empty);

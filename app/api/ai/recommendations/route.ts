@@ -2,10 +2,8 @@ import {
   recommendCareerPaths,
   recommendationsRequestSchema,
 } from "@/lib/ai";
-import { hasLiveAiKey } from "@/lib/ai/model";
-import { getCatalogNode } from "@/lib/ai/sandbox-catalog";
-import { stubRecommendations } from "@/lib/ai/stub-coach";
 import { getSessionProfile } from "@/lib/auth";
+import { getCatalogNode } from "@/lib/ai/sandbox-catalog";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -39,9 +37,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = hasLiveAiKey()
-      ? await recommendCareerPaths(parsed.data.skills_json)
-      : stubRecommendations(parsed.data.skills_json);
+    const result = await recommendCareerPaths(parsed.data.skills_json);
     const enriched = result.recommendations.map((item) => ({
       path_name: item.path_name,
       reason: item.reason,

@@ -3,10 +3,8 @@ import {
   extractSkillMatrix,
   skillExtractionRequestSchema,
 } from "@/lib/ai";
-import { hasLiveAiKey } from "@/lib/ai/model";
-import { stubSkillMatrix } from "@/lib/ai/stub-coach";
 import { getSessionProfile } from "@/lib/auth";
-import { repo } from "@/lib/data";
+import { createClient } from "@/lib/supabase/server";
 import type { SkillsJson } from "@/lib/types/database";
 
 export const runtime = "nodejs";
@@ -45,19 +43,27 @@ export async function POST(request: Request) {
   }
 
   try {
-    const skills = hasLiveAiKey()
-      ? await extractSkillMatrix(parsed.data.messages)
-      : stubSkillMatrix(parsed.data.messages);
+    const skills = await extractSkillMatrix(parsed.data.messages);
     const readinessScore = calculateReadinessScore(skills);
     const skillsJson = skills as SkillsJson;
 
-    // Through the data seam rather than a direct insert: the offline fallback
-    // has no Supabase to reach, and the matcher reads matrices from here.
-    const data = await repo().saveSkillMatrix({
-      user_id: profile.id,
-      skills_json: skillsJson,
-      readiness_score: readinessScore,
-    });
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("skill_matrices")
+      .insert({
+        user_id: profile.id,
+        skills_json: skillsJson,
+        readiness_score: readinessScore,
+      })
+      .select("id, skills_json, readiness_score, created_at")
+      .single();
+
+    if (error) {
+      return Response.json(
+        { error: "Failed to save skill matrix", details: error.message },
+        { status: 500 },
+      );
+    }
 
     return Response.json({
       id: data.id,

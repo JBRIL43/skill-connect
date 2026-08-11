@@ -27,8 +27,8 @@ export default function CoachError({
         <CardHeader className="gap-4">
           <CardTitle>The coach ran into a problem</CardTitle>
           <CardDescription>
-            {error.message.includes("OPENAI_API_KEY") || error.message.includes("API key")
-              ? "The AI provider is not configured. Ask a teammate to set OPENAI_API_KEY, or set AI_MODE=stub to run offline."
+            {error.message.includes("API key") || error.message.includes("GEMINI_API_KEY") || error.message.includes("OPENAI_API_KEY")
+              ? "The AI provider is not configured. Set GEMINI_API_KEY (or OPENAI_API_KEY), or set AI_MODE=stub to run offline."
               : "Something went wrong loading the AI coach. Your conversation has not been lost."}
           </CardDescription>
           <Button onClick={reset} variant="outline" className="w-fit">

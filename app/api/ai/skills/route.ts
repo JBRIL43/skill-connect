@@ -71,7 +71,12 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to extract skill matrix";
-    const status = message.includes("OPENAI_API_KEY") ? 503 : 500;
+    const status =
+      message.includes("API key") ||
+      message.includes("OPENAI_API_KEY") ||
+      message.includes("GEMINI_API_KEY")
+        ? 503
+        : 500;
     return Response.json({ error: message }, { status });
   }
 }

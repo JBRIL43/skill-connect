@@ -273,16 +273,12 @@ function ReportCard({
       {/* CTAs */}
       <div className="flex flex-wrap gap-3">
         {isSme ? (
-          <Button asChild>
-            <Link href="/matcher/templates/new">
-              {isEn ? "Build a Role Skill Template" : "የሙያ ክህሎት ቅርጸት ይፍጠሩ"}
-            </Link>
+          <Button render={<Link href="/matcher/templates/new" />}>
+            {isEn ? "Build a Role Skill Template" : "የሙያ ክህሎት ቅርጸት ይፍጠሩ"}
           </Button>
         ) : (
-          <Button asChild>
-            <Link href="/signup">
-              {isEn ? "Create a free account" : "ነጻ መለያ ይፍጠሩ"}
-            </Link>
+          <Button render={<Link href="/signup" />}>
+            {isEn ? "Create a free account" : "ነጻ መለያ ይፍጠሩ"}
           </Button>
         )}
         <Button type="button" variant="outline" onClick={onReset}>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 560" role="img" aria-label="Coffee-stained handwritten delivery note">
+  <defs>
+    <filter id="paper" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" result="noise"/>
+      <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0.95  0 0 0 0 0.92  0 0 0 0 0.85  0 0 0 0.08 0"/>
+      <feBlend in="SourceGraphic" in2="noise" mode="multiply"/>
+    </filter>
+  </defs>
+  <rect width="420" height="560" fill="#f4ecd8" filter="url(#paper)"/>
+  <ellipse cx="310" cy="120" rx="70" ry="55" fill="#6b4423" opacity="0.18"/>
+  <ellipse cx="330" cy="130" rx="45" ry="35" fill="#4a2f18" opacity="0.12"/>
+  <ellipse cx="95" cy="480" rx="55" ry="40" fill="#6b4423" opacity="0.1"/>
+  <text x="36" y="52" font-family="Segoe Print, Comic Sans MS, cursive" font-size="22" fill="#2a2418">Morning run  12 Aug</text>
+  <text x="36" y="88" font-family="Segoe Print, Comic Sans MS, cursive" font-size="16" fill="#4a4030">Coordinator: Dawit (out today)</text>
+  <line x1="36" y1="102" x2="360" y2="102" stroke="#8a7a60" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="40" y="138" font-family="Segoe Print, Comic Sans MS, cursive" font-size="17" fill="#1f1a12">Sheraton kitchen  80kg mixed greens</text>
+  <text x="48" y="162" font-family="Segoe Print, Comic Sans MS, cursive" font-size="15" fill="#3d3528">(was 60?) call them!!! gate closes 7am</text>
+  <text x="40" y="198" font-family="Segoe Print, Comic Sans MS, cursive" font-size="17" fill="#1f1a12">Bole cafe  12 crate tomato</text>
+  <text x="40" y="232" font-family="Segoe Print, Comic Sans MS, cursive" font-size="17" fill="#1f1a12">Lucy hotel  cancel yday? redo 40kg</text>
+  <text x="48" y="256" font-family="Segoe Print, Comic Sans MS, cursive" font-size="14" fill="#6b3020">URGENT  chef angry</text>
+  <text x="40" y="292" font-family="Segoe Print, Comic Sans MS, cursive" font-size="17" fill="#1f1a12">Van 2  broken belt @ 5:40</text>
+  <text x="48" y="316" font-family="Segoe Print, Comic Sans MS, cursive" font-size="15" fill="#3d3528">use van 1 twice? Bishoftu farm late</text>
+  <text x="40" y="352" font-family="Segoe Print, Comic Sans MS, cursive" font-size="17" fill="#1f1a12">Tomoca rest.  8 crate onion</text>
+  <text x="40" y="386" font-family="Segoe Print, Comic Sans MS, cursive" font-size="17" fill="#1f1a12">Hilton  25kg potato + herbs</text>
+  <text x="48" y="410" font-family="Segoe Print, Comic Sans MS, cursive" font-size="14" fill="#3d3528">herbs = parsley? basil?</text>
+  <text x="40" y="446" font-family="Segoe Print, Comic Sans MS, cursive" font-size="16" fill="#4a4030">&6 more stops on WhatsApp&</text>
+  <text x="40" y="500" font-family="Segoe Print, Comic Sans MS, cursive" font-size="15" fill="#6b3020" font-style="italic">Reconcile w/ sheet before dispatch!</text>
+  <path d="M 280 430 Q 300 450 320 435" stroke="#2a5a8a" stroke-width="2" fill="none" opacity="0.5"/>
+  <text x="250" y="520" font-family="Segoe Print, Comic Sans MS, cursive" font-size="13" fill="#888" transform="rotate(-4 250 520)"> Selam, temp coordinator</text>
+</svg>

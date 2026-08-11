@@ -1,0 +1,374 @@
+# Skill-Connect Ethiopia
+
+AI-powered workforce infrastructure connecting Ethiopian youth with SMEs through
+verified, AI-graded capability scores rather than self-reported resume claims.
+
+Built for the Cursor AI Hackathon Ethiopia. Full spec in
+[`docs/PROJECT_DOCS.md`](docs/PROJECT_DOCS.md), per-developer task lists in
+[`docs/TASK_BREAKDOWN.md`](docs/TASK_BREAKDOWN.md).
+
+## Getting started
+
+```bash
+npm install
+cp .env.example .env.local   # then fill in the values from the team secrets channel
+npm run dev
+```
+
+The app runs at http://localhost:3000.
+
+`.env.local` is gitignored. Never commit real credentials — `.env.example` is
+the only env file that belongs in git.
+
+## Database
+
+The Supabase project is already provisioned and all migrations are applied. You
+only need the URL and anon key in your `.env.local` to start building — ask
+Dev 1 on the secrets channel.
+
+Migrations live in `supabase/migrations` and run in filename order:
+
+| File | What it does |
+| --- | --- |
+| `0001_initial_schema.sql` | Extensions, enums, all 11 tables, RLS enabled with no policies (deny-all) |
+| `0002_rls_policies.sql` | The access rules from Section 9 of the spec |
+| `0003_auth_signup_trigger.sql` | Creates the profile row (and an SME's company profile) on signup |
+| `0004_auto_enable_rls_trigger.sql` | Event trigger forcing RLS on any future `public` table |
+| `0005_column_grants.sql` | Column-level grants, so a user cannot edit their own `role` |
+
+Dev 1 applies new migrations with `npx supabase db push`. Nobody else should
+create files in this folder.
+
+## Deployment
+
+Live at **https://skill-connect-orcin.vercel.app** (Vercel project
+`skatephi-1690s-projects/skill-connect`).
+
+Deploys are pushed from a machine rather than triggered by Git. Vercel could not
+connect to `JBRIL43/skill-connect` because that needs a GitHub login connection
+on the Vercel account, and the repo belongs to Gibril — not worth unblocking
+mid-build, since a CLI deploy takes about ninety seconds:
+
+```powershell
+npx vercel --prod
+```
+
+The four server-side variables are already set on Production
+(`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_INVITE_CODE`). Dev 2 and Dev 3 will need to
+add their LLM key with `npx vercel env add OPENAI_API_KEY production` before
+their pillars work in production.
+
+Both test suites can be pointed at the live site, and should be before the demo:
+
+```powershell
+.\scripts\verify-routing.ps1     -BaseUrl https://skill-connect-orcin.vercel.app
+.\scripts\test-notifications.ps1 -BaseUrl https://skill-connect-orcin.vercel.app
+```
+
+## Authentication
+
+Email and password only. Section 4 describes signing up with "email or phone",
+but real phone auth needs a paid SMS provider with uncertain Ethiopian
+deliverability, so phone is captured as an optional **profile field** instead —
+the signup form collects it, `09XX`/`+251` variants are normalized to one
+canonical `+251XXXXXXXXX`, and the signup trigger writes it to `profiles.phone`.
+Describe it as "email sign-in, phone on the profile" in the pitch rather than
+implying SMS login.
+
+Email confirmation is turned off on this project, so new signups work
+immediately without waiting on an inbox.
+
+Role routing is asserted by `.\scripts\verify-routing.ps1`: each role has one
+landing page and cannot reach another's.
+
+### Test accounts
+
+Password for all three is `Test1234!`.
+
+| Email | Role | Lands on |
+| --- | --- | --- |
+| `selam.seeker@example.com` | job_seeker | `/dashboard` |
+| `abeba.sme@example.com` | sme | `/dashboard` (SME view) |
+| `sneaky.admin@example.com` | admin | `/admin` |
+
+### Creating another admin
+
+Admin is never self-serve. Either flip a user's `role` to `admin` in Supabase
+Studio → Table Editor → `profiles`, or sign in as any account and visit
+`/admin/promote` with the `ADMIN_INVITE_CODE` from `.env.local`.
+
+## Scripts
+
+```powershell
+.\scripts\test-rls.ps1                      # the security test suite — run after any migration
+.\scripts\verify-routing.ps1                # role routing — needs `npm run dev` in another terminal
+.\scripts\test-notifications.ps1            # the notification check — also needs a dev server
+.\scripts\verify-promote.ps1                # the invite-code path to admin — also needs a dev server
+.\scripts\test-payments.ps1                 # the upgrade flow and webhook — also needs a dev server
+.\scripts\run-sql.ps1 -Query "select 1;"    # ad-hoc SQL against the linked project
+```
+
+Two more run without a database or a dev server, so they are the fastest way to
+catch a break:
+
+```powershell
+npm run test:sign   # Telebirr request signing, against Ethio Telecom's worked example
+npm run test:plan   # which templates a free vs premium SME gets notified on
+```
+
+`test-rls.ps1` checks that candidates see their own data, that nobody else can,
+that an unreviewed handover brief is invisible even to the company that
+commissioned it, that one company cannot see another's notifications or
+payments, and that a job seeker cannot promote themselves to admin.
+
+`verify-promote.ps1` covers the deliberate hole in the middle of that: the invite
+code that does mint an admin, through the service role. It creates a throwaway
+account, checks a wrong code is refused, checks the real one works, and deletes
+the account again so no spare admin is left behind.
+
+`test-notifications.ps1` covers the contract Dev 3 calls into: an opted-out
+candidate is never surfaced, a cleared template files exactly one notification,
+a second call files none, and a candidate cannot run the check for anyone else.
+
+`verify-routing.ps1` signs in as each test account and asserts where the server
+actually sends them: signed-out users bounce to `/login`, a job seeker and an
+SME get different dashboards, and only an admin reaches `/admin`. If Next tells
+you port 3000 was taken, pass the port it used:
+`.\scripts\verify-routing.ps1 -BaseUrl http://localhost:3001`.
+
+`test-payments.ps1` runs the whole upgrade on a throwaway SME — checkout, the
+styled gateway, confirmation, premium unlocking, the admin counter moving — then
+posts the webhook twice to prove settling is idempotent. It deliberately does not
+use a seeded company, because paying as one would leave it on Premium and change
+what the demo shows.
+
+Any FAIL in any suite is a P0 and stops the build.
+
+## Payments
+
+An SME upgrades from `/dashboard/upgrade`. Which rail that uses is one
+environment variable:
+
+```
+PAYMENTS_PROVIDER=mock       # Telebirr-styled checkout on our own origin
+PAYMENTS_PROVIDER=telebirr   # the real C2B sandbox
+```
+
+Nothing outside `lib/payments/` knows which is live, so falling back mid-event is
+that line plus a redeploy. Both write the same `payments` row; only `provider`
+differs. The mock is not scaffolding to be deleted — it is the Section 16 answer
+to the sandbox being unreachable, and it stays tested.
+
+**Premium is derived, never stored.** An SME is premium because they own a
+`payments` row with `status = 'paid'`. There is no `is_premium` flag to drift out
+of step with the payment that was meant to set it.
+
+**What it unlocks.** Auto-notify beyond the first Role Skill Template, plus
+priority Institutional Handover. The free allowance is one template rather than
+zero on purpose: the demo fires a notification at step 5 and only upgrades at
+step 7, so a hard gate would break the script when run in order. The rule lives
+in `lib/payments/plan.ts` and is enforced in `/api/notifications/check`, which is
+the only place `notify_on_match` does anything — so it holds even if a template
+editor that has not heard of premium lets the flag be set.
+
+**The real rail, if you are picking it up.** Three steps against Ethio Telecom's
+C2B gateway: fetch a fabric token, `preOrder` for a `prepay_id`, then redirect to
+a signed paygate URL. Two things are counter-intuitive and both are commented in
+the code. The signature is RSA-PSS even though the field is called
+`SHA256WithRSA` — their prose says PKCS#1 and four of their five code samples say
+otherwise. And the paygate query string is built by hand because the base64
+signature must not be URL-encoded. `npm run test:sign` pins the first against
+their own worked example.
+
+Payment is confirmed by asking the gateway (`queryOrder`), not by trusting the
+webhook. Verifying the callback's signature would need Telebirr's public key and
+the portal only issues ours, so `/api/payments/telebirr/notify` treats the
+callback as a prompt to go and check. It is also the reason the completion screen
+polls: the testbed never sends a real USSD prompt, orders just settle after
+about thirty seconds.
+
+## Demo seed data
+
+`supabase/seed/seed-job-seekers.json` and `seed-smes.json` hold the personas the
+demo runs on. Two ways to load them:
+
+```powershell
+npm run seed        # from a terminal
+```
+
+or the **Seed demo data** button in the admin console, which is the fallback if a
+live signup or a grading call fails on stage. Both run the same code and both are
+safe to repeat — every row is keyed off the persona's `key`, and a second run
+updates the same rows instead of creating duplicates.
+
+The sample committed here is synthetic. Replacing it with real personas means
+editing the JSON only — no code changes, and no need to understand the schema.
+
+### Score keys are a fixed list
+
+Every key under a candidate's `scores` and a template's `thresholds` must be one
+of the six in `lib/sandbox/competencies.ts`:
+
+`ai_prompt_literacy` · `task_accuracy` · `customer_comms` · `data_tools` ·
+`process_thinking` · `adaptability`
+
+This matters more than it looks. Matching compares the two blobs key by key, and
+an unrecognised key is not an error — it is silently dropped, so the candidate
+simply has no score for it. Invent a key and the template it belongs to will
+match nobody, with an empty screen and nothing in the logs to explain why. The
+spec's own two examples disagree on these names; that file is the reconciliation,
+and it is the only place the list may change.
+
+`skills` is a different thing — it is Dev 2's intake matrix, nothing in matching
+reads it, and it is free-form.
+
+A job seeker looks like this. `key` is a permanent nickname for the persona:
+change any other field freely, but changing `key` creates a second person.
+
+```json
+{
+  "key": "meron-tadesse",
+  "full_name": "Meron Tadesse",
+  "email": "meron.tadesse@seed.skillconnect.et",
+  "phone": "+251911234501",
+  "region": "Addis Ababa",
+  "bio": "One or two sentences in their own voice.",
+  "opt_in_discoverable": true,
+  "readiness_score": 74,
+  "skills": { "technical": { "excel_basics": 71 }, "human": { "customer_comms": 82 } },
+  "sandbox_scores": [
+    {
+      "node_id": "merkato-whatsapp-catalog",
+      "mode": "standard",
+      "scores": { "ai_prompt_literacy": 82, "task_accuracy": 74, "customer_comms": 88 }
+    }
+  ],
+  "badges": [{ "node_id": "merkato-whatsapp-catalog", "badge_name": "Catalog Builder" }]
+}
+```
+
+A company looks like this:
+
+```json
+{
+  "key": "abeba-retail",
+  "company_name": "Abeba Retail",
+  "contact_name": "Abeba Mekonnen",
+  "email": "abeba.retail@seed.skillconnect.et",
+  "industry": "Retail",
+  "size": "11-50",
+  "about": "What the business does, in plain language.",
+  "verified": true,
+  "templates": [
+    {
+      "key": "inventory-assistant",
+      "role_name": "Retail Inventory Assistant",
+      "notify_on_match": true,
+      "thresholds": { "data_tools": 70, "ai_prompt_literacy": 75 }
+    }
+  ],
+  "postings": [
+    {
+      "key": "inventory-assistant-q3",
+      "template_key": "inventory-assistant",
+      "description": "What the person would actually do all day.",
+      "is_transition_role": false
+    }
+  ]
+}
+```
+
+Three rules make the demo tell a story rather than show noise:
+
+1. **Every score is 0-100,** and every competency name comes from the fixed list
+   above. The *same* key must appear in a candidate's `scores` and in a company's
+   `thresholds`, or the two never meet.
+2. **At least one candidate should clear a template and one should miss it.**
+   The notification demo needs both, and a near miss is the more interesting
+   story on stage.
+3. **At least one candidate should have `opt_in_discoverable: false`,** to show
+   that a candidate who has not opted in stays invisible to companies.
+
+Every seeded account signs in with the password in `SEED_PASSWORD`
+(`lib/seed/contract.ts`), currently `Test1234!`, so you can log in as any
+persona during the pitch.
+
+## Folder ownership
+
+Three developers work in parallel. Stay inside your own folders; if you need
+something outside them, ask its owner rather than editing it.
+
+| Path | Owner |
+| --- | --- |
+| `supabase/**`, `app/admin/**`, `app/api/payments/**`, `app/auth/**`, `lib/supabase/**`, `middleware.ts` | Dev 1 |
+| `app/coach/**`, `app/chatbot/**` | Dev 2 |
+| `app/sandbox/**`, `app/matcher/**`, `app/company-profile/**` | Dev 3 |
+
+Schema changes are Dev 1's alone. Describe what you need in plain language and
+Dev 1 writes the migration — this is what keeps migration merge conflicts from
+appearing at hour 30.
+
+## Shared building blocks
+
+- `lib/supabase/server.ts` — request-scoped client that runs under the user's
+  RLS policies. Use this by default.
+- `lib/supabase/client.ts` — browser client.
+- `lib/supabase/admin.ts` — service-role client that bypasses RLS. Server-side
+  only, for the admin console, the notification check, and payments.
+- `lib/auth.ts` — `getSessionProfile`, `requireProfile`, `requireRole`.
+- `lib/types/database.ts` — row types mirroring the migrations.
+
+## UI conventions
+
+Three people are building three pillars at once. These four rules are what stop
+the demo from looking like three separate apps stitched together.
+
+**Wrap every signed-in page in `AppShell`.** It supplies the header, the
+max-width and the page padding, so `/coach`, `/sandbox` and `/admin` all frame
+identically. Put the title in `PageHeader` rather than a bare `<h1>`.
+
+```tsx
+<AppShell profile={profile}>
+  <PageHeader title="Sandbox" description="Solve a real Ethiopian business challenge." />
+  {/* page content */}
+</AppShell>
+```
+
+**Never hard-code a colour.** No `text-green-600`, no hex values. Use the theme
+tokens — `bg-background`, `text-muted-foreground`, `bg-primary`, `bg-card`,
+`text-destructive` — so dark mode and any late palette change apply everywhere
+at once. Chart and radar series come from `--chart-1` through `--chart-5`, which
+are five distinct hues chosen so the Skill Radar stays readable.
+
+**Any number out of 100 renders as `<ScoreBadge />`.** Sandbox Scores, Match
+Scores, the coach's initial read and the admin table all show the same thing, so
+they should look the same. Pass `threshold` when the score is being judged
+against a Role Skill Template bar and the badge switches to cleared/not-cleared.
+
+```tsx
+<ScoreBadge score={82} label="Prompt engineering" />
+<ScoreBadge score={68} threshold={70} />
+```
+
+**No screen should ever look broken.** Use `EmptyState` when there is no data
+and the skeletons in `components/skeletons.tsx` (`PageHeaderSkeleton`,
+`CardGridSkeleton`, `TableSkeleton`) while something loads. An unstyled empty
+table on stage reads as a bug.
+
+Shared files — `app/globals.css`, `components/app-shell.tsx`,
+`components/app-header.tsx`, `components/ui/**` — belong to everyone, so a
+change there breaks all three pillars at once. Say so in the team channel before
+editing one.
+
+## Security rules that are not negotiable
+
+See [`docs/RLS_MODEL.md`](docs/RLS_MODEL.md) for the full plain-English policy
+summary. The short version:
+
+- Companies never read a candidate's raw intake or handover transcript. They see
+  derived output only: match score, gap analysis, and badges.
+- A candidate's scores only count toward a company's search once that candidate
+  sets `opt_in_discoverable`. Filtered server-side, never in the client.
+- A continuity brief is invisible to everyone until the outgoing employee has
+  reviewed and redacted it.

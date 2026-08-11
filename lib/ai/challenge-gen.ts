@@ -8,7 +8,6 @@ import type {
   ScoreMap,
   SmePosting,
 } from "@/lib/data/types";
-import { normalizeInterview } from "@/lib/handover/normalize";
 import {
   COMPETENCIES,
   isCompetencyKey,
@@ -47,19 +46,12 @@ export function transitionNodeId(postingId: string): string {
 }
 
 /**
- * The interview is nullable in the schema — a brief can exist before the
+ * The interview is nullable in the schema — a brief can exist before Dev 2's
  * handover interview has run. Every field is optional anyway, so an empty
  * interview degrades to the generic transition scenario rather than throwing.
- *
- * Normalized because two interview shapes now reach this table; see
- * lib/handover/normalize.ts for which, and why reading only one of them fails
- * without ever raising an error.
  */
 function interviewOf(args: TransitionChallengeArgs): RawInterview {
-  return normalizeInterview(
-    args.brief.raw_interview_json,
-    args.brief.generated_brief,
-  );
+  return args.brief.raw_interview_json ?? {};
 }
 
 /**

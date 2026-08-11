@@ -155,23 +155,6 @@ export const supabaseRepository: DataRepository = {
     );
   },
 
-  // Session client: 0002 lets a candidate insert their own matrix, and this is
-  // always the candidate acting on their own row.
-  async saveSkillMatrix(input) {
-    const { data, error } = await (await db())
-      .from("skill_matrices")
-      .insert({
-        user_id: input.user_id,
-        skills_json: input.skills_json,
-        readiness_score: input.readiness_score,
-      })
-      .select("*")
-      .single();
-
-    if (error) throw new Error(error.message);
-    return data as SkillMatrix;
-  },
-
   async savePostingEmbedding(postingId, vector) {
     // The SME owns the posting, but 0005 does not grant them the embedding
     // column, and the vector is engine output rather than something they typed.
@@ -528,80 +511,6 @@ export const supabaseRepository: DataRepository = {
           postings.map((row) => row.id),
         ),
     );
-  },
-
-  // Two booleans, selected without the content columns, so this cannot become
-  // an accidental read path onto an unreviewed brief.
-  async getBriefStatus(postingId) {
-    const row = unwrap<{ reviewed_by_employee: boolean }>(
-      await elevated()
-        .from("continuity_briefs")
-        .select("reviewed_by_employee")
-        .eq("posting_id", postingId)
-        .maybeSingle(),
-    );
-
-    return { exists: Boolean(row), reviewed: Boolean(row?.reviewed_by_employee) };
-  },
-
-  // Reads pre-redaction content. Only the redaction screen may call this, and
-  // only after checking the caller owns the posting — see the interface note.
-  async getBriefDraft(postingId) {
-    return unwrap<ContinuityBrief>(
-      await elevated()
-        .from("continuity_briefs")
-        .select("*")
-        .eq("posting_id", postingId)
-        .maybeSingle(),
-    );
-  },
-
-  // Elevated for the same reason as every other write here: the table has no
-  // write policy, and the outgoing employee is not necessarily an account.
-  async saveBriefDraft(input) {
-    const existing = unwrap<{ id: string }>(
-      await elevated()
-        .from("continuity_briefs")
-        .select("id")
-        .eq("posting_id", input.posting_id)
-        .maybeSingle(),
-    );
-
-    // reviewed_by_employee is forced false rather than left alone: an edit to
-    // an approved brief has not itself been approved.
-    const payload = {
-      posting_id: input.posting_id,
-      raw_interview_json: input.raw_interview_json,
-      generated_brief: input.generated_brief,
-      reviewed_by_employee: false,
-    };
-
-    const written = existing
-      ? await elevated()
-          .from("continuity_briefs")
-          .update(payload)
-          .eq("id", existing.id)
-          .select("*")
-          .single()
-      : await elevated()
-          .from("continuity_briefs")
-          .insert(payload)
-          .select("*")
-          .single();
-
-    if (written.error) throw new Error(written.error.message);
-    return written.data as ContinuityBrief;
-  },
-
-  async setBriefReviewed(postingId, reviewed, generatedBrief) {
-    const patch: Record<string, unknown> = { reviewed_by_employee: reviewed };
-    if (generatedBrief !== undefined) patch.generated_brief = generatedBrief;
-
-    const { error } = await elevated()
-      .from("continuity_briefs")
-      .update(patch)
-      .eq("posting_id", postingId);
-    if (error) throw new Error(error.message);
   },
 
   // Cross-user: continuity_briefs has no write policy for anyone.

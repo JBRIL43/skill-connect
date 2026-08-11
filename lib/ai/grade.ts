@@ -96,8 +96,7 @@ async function gradeWithModel(args: GradeArgs): Promise<GradeResult> {
       "The candidate is expected to solve the task WITH an AI assistant, so using the assistant well is part of the skill, not cheating.",
       "Score each rubric competency from 0 to 100 against its stated criteria only.",
       "Be specific and evidence-based in comments, referring to what the candidate actually wrote.",
-      "Critique the work product, never the person. Ethiopian professional culture values indirect, face-saving feedback: acknowledge what the submission did well before naming the gap, and frame every shortfall as an improvement to make rather than a failure to judge.",
-      "Keep comments practical and actionable — a candidate reading them should know exactly what to change on the next attempt.",
+      "Critique the work product, never the person.",
       mode === "pressure_simulation"
         ? "This submission was produced under the optional pressure simulation. Judge the work on the same standard; do not penalise the candidate for the mode."
         : "",

@@ -146,5 +146,13 @@ export type Payment = {
   provider: PaymentProvider;
   amount: number;
   status: PaymentStatus;
+  /**
+   * Our order number, sent to the provider and echoed back on the webhook, which
+   * arrives with no session attached -- so this is the only thing tying a
+   * callback to an SME. Written by the service role (migration 0007).
+   */
+  external_ref: string | null;
+  /** The provider's own transaction id, recorded once confirmed. */
+  provider_tx_id: string | null;
   created_at: string;
 };

@@ -35,8 +35,8 @@ export default function MatcherError({
             <Button onClick={reset} variant="outline" size="sm">
               Try again
             </Button>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/dashboard">Back to dashboard</Link>
+            <Button variant="ghost" size="sm" render={<Link href="/dashboard" />}>
+              Back to dashboard
             </Button>
           </div>
         </CardHeader>

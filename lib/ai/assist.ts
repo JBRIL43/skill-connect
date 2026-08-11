@@ -6,7 +6,6 @@ import type { SandboxMode } from "@/lib/data/types";
 import { competencyLabel } from "@/lib/sandbox/competencies";
 import type { SandboxNode } from "@/lib/sandbox/nodes";
 import {
-  countClarifications,
   type RealitySession,
 } from "@/lib/sandbox/reality";
 

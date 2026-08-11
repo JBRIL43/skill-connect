@@ -35,8 +35,8 @@ export default function DashboardError({
             <Button onClick={reset} variant="outline" size="sm">
               Try again
             </Button>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/">Back to home</Link>
+            <Button variant="ghost" size="sm" render={<Link href="/" />}>
+              Back to home
             </Button>
           </div>
         </CardHeader>

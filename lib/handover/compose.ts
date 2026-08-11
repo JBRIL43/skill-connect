@@ -13,7 +13,6 @@ const BRIEF_SYSTEM = [
   "Write three to five sentences of plain prose, no headings and no bullet points.",
   "Use only what the interview says. Do not invent detail and do not speculate.",
   "Write around client names or individuals if any appear, using their role instead.",
-  "Ethiopian small-business roles carry a lot of undocumented knowledge — informal relationships, unwritten rules, and hard-won shortcuts. Preserve this texture in the brief rather than flattening it into generic corporate language. The goal is that the next person can actually do the job, not that the brief looks polished.",
 ].join(" ");
 
 /**

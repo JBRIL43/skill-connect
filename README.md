@@ -20,7 +20,7 @@ The app runs at http://localhost:3000.
 `.env.local` is gitignored. Never commit real credentials — `.env.example` is
 the only env file that belongs in git.
 
-## Database
+## DB
 
 The Supabase project is already provisioned and all migrations are applied. You
 only need the URL and anon key in your `.env.local` to start building — ask

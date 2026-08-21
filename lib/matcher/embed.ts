@@ -1,7 +1,7 @@
 import { embedMany } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 
-import { isLiveAI } from "@/lib/ai/provider";
+import { isLiveAI, preferredProvider } from "@/lib/ai/provider";
 import { tokens } from "@/lib/ai/text-signals";
 
 /**
@@ -11,6 +11,10 @@ import { tokens } from "@/lib/ai/text-signals";
  * are `vector(1536)` and Postgres rejects anything else, so a demo machine with
  * no API key has to write something of the right shape or the persistence path
  * is untestable until the moment it matters. Swapping providers is one constant.
+ *
+ * Live embeddings stay on OpenAI's 1536-d models: Gemini's embedding widths do
+ * not match the schema, so a Gemini-only machine uses the local hashed path.
+ * Chat/grading still go through Gemini via lib/ai/provider.ts.
  *
  * The offline path is a hashed bag-of-words, not a language model. It encodes
  * lexical overlap and nothing more. It keeps the pipeline, the storage and the
@@ -29,14 +33,17 @@ export type EmbedResult = {
 
 /** Which provider a run would use right now, without embedding anything. */
 export function plannedSource(): EmbeddingSource {
-  return isLiveAI() ? "openai" : "local";
+  return isLiveAI() && process.env.OPENAI_API_KEY ? "openai" : "local";
 }
 
 export async function embedTexts(texts: string[]): Promise<EmbedResult> {
   if (texts.length === 0) return { vectors: [], source: plannedSource() };
 
-  if (isLiveAI()) {
+  // Schema is vector(1536). Only OpenAI's small embedding model matches that
+  // out of the box; Gemini-only deploys keep the deterministic local vectors.
+  if (isLiveAI() && process.env.OPENAI_API_KEY) {
     try {
+      const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const { embeddings } = await embedMany({
         model: openai.textEmbeddingModel(
           process.env.AI_EMBEDDING_MODEL ?? "text-embedding-3-small",
@@ -60,6 +67,10 @@ export async function embedTexts(texts: string[]): Promise<EmbedResult> {
     } catch (error) {
       console.error("[embed] embedding call failed, using local vectors", error);
     }
+  } else if (isLiveAI() && preferredProvider() === "gemini") {
+    console.info(
+      "[embed] Gemini-only mode: using local 1536-d vectors (schema width)",
+    );
   }
 
   return { vectors: texts.map(localVector), source: "local" };

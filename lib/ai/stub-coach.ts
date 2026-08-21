@@ -18,10 +18,10 @@ import type {
  * The coach, with no API key.
  *
  * Every call in lib/ai/engine.ts goes through getAiModel(), which throws when
- * OPENAI_API_KEY is unset, so /coach currently renders and then fails on the
- * first message. That is the whole of Pillar 1 gone if the venue wifi is bad or
- * the key is rate-limited mid-demo — and no key is the state this repo is
- * actually in.
+ * neither GEMINI_API_KEY nor OPENAI_API_KEY is set, so /coach currently renders
+ * and then fails on the first message. That is the whole of Pillar 1 gone if
+ * the venue wifi is bad or the key is rate-limited mid-demo — and no key is
+ * the state this repo ships with.
  *
  * So: the same bargain the sandbox grader already makes under AI_MODE=stub.
  * Deterministic, offline, derived from what the person actually typed. It is

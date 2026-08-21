@@ -303,38 +303,6 @@ export const mockRepository: DataRepository = {
     if (row) row.seen = true;
   },
 
-  async getBriefByPosting(postingId) {
-    // Reviewed only, matching the supabase adapter. Mock is the demo-day
-    // fallback, so an unreviewed brief must be as unreachable here as it is
-    // live — otherwise the fallback is the one path that leaks it.
-    return (
-      store().continuityBriefs.find(
-        (row) => row.posting_id === postingId && row.reviewed_by_employee,
-      ) ?? null
-    );
-  },
-
-  // Mirrors the supabase adapter's elevated read: reviewed-only, but not scoped
-  // to the owning SME, because the candidate taking the challenge never owns it.
-  async getReviewedBriefForChallenge(postingId) {
-    return (
-      store().continuityBriefs.find(
-        (row) => row.posting_id === postingId && row.reviewed_by_employee,
-      ) ?? null
-    );
-  },
-
-  async listReviewedBriefsBySme(smeId) {
-    const postingIds = new Set(
-      store()
-        .postings.filter((row) => row.sme_id === smeId)
-        .map((row) => row.id),
-    );
-    return store().continuityBriefs.filter(
-      (row) => row.reviewed_by_employee && postingIds.has(row.posting_id),
-    );
-  },
-
   async getBriefStatus(postingId) {
     const row = store().continuityBriefs.find(
       (item) => item.posting_id === postingId,
@@ -384,6 +352,38 @@ export const mockRepository: DataRepository = {
     if (!row) return;
     row.reviewed_by_employee = reviewed;
     if (generatedBrief !== undefined) row.generated_brief = generatedBrief;
+  },
+
+  async getBriefByPosting(postingId) {
+    // Reviewed only, matching the supabase adapter. Mock is the demo-day
+    // fallback, so an unreviewed brief must be as unreachable here as it is
+    // live — otherwise the fallback is the one path that leaks it.
+    return (
+      store().continuityBriefs.find(
+        (row) => row.posting_id === postingId && row.reviewed_by_employee,
+      ) ?? null
+    );
+  },
+
+  // Mirrors the supabase adapter's elevated read: reviewed-only, but not scoped
+  // to the owning SME, because the candidate taking the challenge never owns it.
+  async getReviewedBriefForChallenge(postingId) {
+    return (
+      store().continuityBriefs.find(
+        (row) => row.posting_id === postingId && row.reviewed_by_employee,
+      ) ?? null
+    );
+  },
+
+  async listReviewedBriefsBySme(smeId) {
+    const postingIds = new Set(
+      store()
+        .postings.filter((row) => row.sme_id === smeId)
+        .map((row) => row.id),
+    );
+    return store().continuityBriefs.filter(
+      (row) => row.reviewed_by_employee && postingIds.has(row.posting_id),
+    );
   },
 
   async setBriefCustomNode(briefId, nodeId) {

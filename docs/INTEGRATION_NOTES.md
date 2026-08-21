@@ -133,6 +133,54 @@ logs. The live database and both seed files are now on the frozen list, and
 `skills_json` on the skill matrix is a separate, free-form thing. Nothing in
 matching reads it.
 
+## Everyone: what to say about payments in the pitch
+
+Section 14 asks us to be explicit about what is real, so here is the honest
+split, and it is a good story either way.
+
+**Real:** the whole Telebirr C2B integration is written against Ethio Telecom's
+own C2B Web Checkout guide, not a community package -- fabric token, signed
+`preOrder`, the signed paygate redirect, `queryOrder` confirmation and the
+`notify_url` webhook. The request signing is verified offline against the worked
+example in their documentation (`npm run test:sign`). That is the file to open if
+an Ethio Telecom representative asks to see the integration, which Section 14
+says they will.
+
+**Mocked, at the time of writing:** which rail actually runs on stage.
+`PAYMENTS_PROVIDER` is on `mock`, because the private key issued by the portal
+arrived truncated and no live call can be signed until it is reissued. The mock
+is a Telebirr-styled checkout on our own origin, clearly labelled "Demo" on the
+screen, and it writes the same `payments` row with `provider = 'mock'`.
+
+Worth saying plainly rather than glossing: the integration is written and tested,
+and it is one environment variable away from live. Do not claim money moved.
+
+## Dev 3: two things premium touches
+
+Both are one-liners on your side; the helpers are built and tested.
+
+**Auto-notify is already gated, and you do not need to do anything.** A free SME
+gets `notify_on_match` on one template, premium gets unlimited. It is enforced
+inside `/api/notifications/check`, so the contract you call is unchanged and your
+template editor can keep letting people tick the box. If you want to show the
+limit in the UI, `canEnableNotify(smeId)` from `lib/payments/premium.ts` answers
+"may they turn on one more".
+
+**Priority handover is yours to place.** Section 6 sells it alongside auto-notify
+and the payments side is ready, but the handover queue is on your branch, so I
+have not reached into it. When you order continuity briefs, put premium companies
+first:
+
+```ts
+import { premiumSmeIds } from "@/lib/payments/premium";
+
+const premium = await premiumSmeIds(briefs.map((b) => b.sme_id));
+briefs.sort((a, b) => Number(premium.has(b.sme_id)) - Number(premium.has(a.sme_id)));
+```
+
+`premiumSmeIds` is one query for the whole list rather than one per row. There is
+also `isPremium(smeId)` for a single check.
+
 ## Dev 1: public `/handover` prefix + signing secret (Dev 2 Phase 6)
 
 Outgoing employees may not have Skill-Connect accounts. The employee interview
@@ -168,6 +216,7 @@ Source of truth: `lib/ai/handover.ts` (`rawInterviewJsonSchema`).
 
 Only consume rows where `reviewed_by_employee = true`. Never read unreviewed
 briefs, and never expose `raw_interview_json` to SME UI.
+
 ## Everyone: the full three-way merge builds and passes
 
 > Added by Dev 3, from a throwaway branch that merged `d2/ai-coach` onto

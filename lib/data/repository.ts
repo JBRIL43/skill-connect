@@ -156,17 +156,6 @@ export interface DataRepository {
   markNotificationSeen(id: string): Promise<void>;
 
   /**
-   * Reviewed briefs only. An unreviewed brief is not returned in a partial or
-   * redacted form — it is absent, so no caller can render one by forgetting a
-   * check. Master checklist: "Continuity Briefs are unreachable until
-   * reviewed_by_employee = true."
-   */
-  getBriefByPosting(postingId: string): Promise<ContinuityBrief | null>;
-  /** Reviewed briefs only — never expose one pre-redaction (Section 9, point 4). */
-  listReviewedBriefsBySme(smeId: string): Promise<ContinuityBrief[]>;
-  setBriefCustomNode(briefId: string, nodeId: string): Promise<void>;
-
-  /**
    * Whether a posting has a brief at all, and whether it has been approved.
    * Two booleans and nothing else, so the posting page can offer to start or
    * resume an interview without acquiring a read onto unreviewed content.
@@ -208,6 +197,17 @@ export interface DataRepository {
     reviewed: boolean,
     generatedBrief?: string,
   ): Promise<void>;
+
+  /**
+   * Reviewed briefs only. An unreviewed brief is not returned in a partial or
+   * redacted form — it is absent, so no caller can render one by forgetting a
+   * check. Master checklist: "Continuity Briefs are unreachable until
+   * reviewed_by_employee = true."
+   */
+  getBriefByPosting(postingId: string): Promise<ContinuityBrief | null>;
+  /** Reviewed briefs only — never expose one pre-redaction (Section 9, point 4). */
+  listReviewedBriefsBySme(smeId: string): Promise<ContinuityBrief[]>;
+  setBriefCustomNode(briefId: string, nodeId: string): Promise<void>;
 
   /**
    * The reviewed brief behind a transition challenge, for challenge generation

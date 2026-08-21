@@ -486,52 +486,6 @@ export const supabaseRepository: DataRepository = {
     if (error) throw new Error(error.message);
   },
 
-  async getBriefByPosting(postingId) {
-    return unwrap<ContinuityBrief>(
-      await (await db())
-        .from("continuity_briefs")
-        .select("*")
-        .eq("posting_id", postingId)
-        .eq("reviewed_by_employee", true)
-        .maybeSingle(),
-    );
-  },
-
-  // Elevated on purpose, and the reasoning is on the interface. Still reviewed-only:
-  // the filter is the redaction guarantee, not the ownership check.
-  async getReviewedBriefForChallenge(postingId) {
-    return unwrap<ContinuityBrief>(
-      await elevated()
-        .from("continuity_briefs")
-        .select("*")
-        .eq("posting_id", postingId)
-        .eq("reviewed_by_employee", true)
-        .maybeSingle(),
-    );
-  },
-
-  async listReviewedBriefsBySme(smeId) {
-    const client = await db();
-
-    const postings = unwrapList<{ id: string }>(
-      await client.from("sme_postings").select("id").eq("sme_id", smeId),
-    );
-    if (postings.length === 0) return [];
-
-    return unwrapList<ContinuityBrief>(
-      await client
-        .from("continuity_briefs")
-        .select("*")
-        .eq("reviewed_by_employee", true)
-        .in(
-          "posting_id",
-          postings.map((row) => row.id),
-        ),
-    );
-  },
-
-  // Two booleans, selected without the content columns, so this cannot become
-  // an accidental read path onto an unreviewed brief.
   async getBriefStatus(postingId) {
     const row = unwrap<{ reviewed_by_employee: boolean }>(
       await elevated()
@@ -602,6 +556,50 @@ export const supabaseRepository: DataRepository = {
       .update(patch)
       .eq("posting_id", postingId);
     if (error) throw new Error(error.message);
+  },
+
+  async getBriefByPosting(postingId) {
+    return unwrap<ContinuityBrief>(
+      await (await db())
+        .from("continuity_briefs")
+        .select("*")
+        .eq("posting_id", postingId)
+        .eq("reviewed_by_employee", true)
+        .maybeSingle(),
+    );
+  },
+
+  // Elevated on purpose, and the reasoning is on the interface. Still reviewed-only:
+  // the filter is the redaction guarantee, not the ownership check.
+  async getReviewedBriefForChallenge(postingId) {
+    return unwrap<ContinuityBrief>(
+      await elevated()
+        .from("continuity_briefs")
+        .select("*")
+        .eq("posting_id", postingId)
+        .eq("reviewed_by_employee", true)
+        .maybeSingle(),
+    );
+  },
+
+  async listReviewedBriefsBySme(smeId) {
+    const client = await db();
+
+    const postings = unwrapList<{ id: string }>(
+      await client.from("sme_postings").select("id").eq("sme_id", smeId),
+    );
+    if (postings.length === 0) return [];
+
+    return unwrapList<ContinuityBrief>(
+      await client
+        .from("continuity_briefs")
+        .select("*")
+        .eq("reviewed_by_employee", true)
+        .in(
+          "posting_id",
+          postings.map((row) => row.id),
+        ),
+    );
   },
 
   // Cross-user: continuity_briefs has no write policy for anyone.

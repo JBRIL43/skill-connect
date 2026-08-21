@@ -55,7 +55,7 @@ export function aiModel() {
     const google = createGoogleGenerativeAI({
       apiKey: process.env.GEMINI_API_KEY,
     });
-    return google(process.env.AI_MODEL ?? "gemini-2.5-pro");
+    return google(process.env.AI_MODEL ?? "gemini-3.1-pro-preview");
   }
 
   const openai = createOpenAI({
